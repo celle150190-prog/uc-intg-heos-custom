@@ -2,58 +2,74 @@ name: Build HEOS Custom ARM64
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
+
+env:
+  INTG_NAME: heos
+  PYTHON_VER: 3.11.12-0.3.0
 
 jobs:
   build:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout
+      - name: Checkout custom repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+      - name: Get exact HEOS 2.1.2 source
+        run: |
+          git clone --depth 1 --branch v2.1.2 https://github.com/mase1981/uc-intg-heos.git upstream
+          cp -r upstream/uc_intg_heos .
+          cp upstream/driver.json .
+          cp patch_remote.py ./patch_remote.py
 
-      - name: Install ARM64 cross-build tools
+      - name: Set custom version
+        run: |
+          python3 - <<'PY'
+          import json
+          p = "driver.json"
+          data = json.load(open(p, encoding="utf-8"))
+          data["version"] = "2.1.3"
+          data["description"]["en"] = "HEOS integration with a custom favorites-only remote UI."
+          json.dump(data, open(p, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+          PY
+
+      - name: Apply HEOS remote customization
+        run: |
+          python3 patch_remote.py
+          python3 -m py_compile uc_intg_heos/remote.py
+
+      - name: Build ARM64 with official Unfolded Circle builder
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-user-static binfmt-support
+          sudo apt-get install -y qemu-system-arm binfmt-support qemu-user-static
+          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
-      - name: Build ARM64 package
+          docker run --rm --name builder \
+            --platform=aarch64 \
+            --user=$(id -u):$(id -g) \
+            -v ${GITHUB_WORKSPACE}:/workspace \
+            docker.io/unfoldedcircle/r2-pyinstaller:${PYTHON_VER} \
+            bash -c \
+            "cd /workspace && \
+             python -m pip install -r requirements.txt && \
+             pyinstaller --clean --onedir \
+             --name intg-${INTG_NAME} \
+             --collect-all zeroconf \
+             --add-data driver.json:. \
+             uc_intg_heos/__init__.py"
+
+      - name: Create Remote 3 installation archive
         run: |
-          docker run --rm \
-            --platform linux/arm64 \
-            -v "$PWD:/workspace" \
-            -w /workspace \
-            python:3.11-bookworm \
-            bash -c '
-              python -m pip install --upgrade pip
-              pip install pyinstaller
-              pip install -r requirements.txt
-              pyinstaller \
-                --clean \
-                --onedir \
-                --name intg-heos \
-                --collect-all zeroconf \
-                --add-data "driver.json:." \
-                uc_intg_heos/__init__.py
-            '
+          mkdir -p artifacts/bin
+          cp -r dist/intg-${INTG_NAME}/* artifacts/bin/
+          mv artifacts/bin/intg-${INTG_NAME} artifacts/bin/driver
+          cp driver.json artifacts/
+          tar czvf uc-intg-${INTG_NAME}-2.1.3-aarch64.tar.gz -C artifacts .
 
-      - name: Create integration archive
-        run: |
-          mkdir -p release
-          cp driver.json release/
-          cp -r dist/intg-heos release/driver
-          tar -czf release/uc-intg-heos-2.1.3-custom-aarch64.tar.gz \
-            -C release driver.json driver
-
-      - name: Upload ARM64 integration
+      - name: Upload finished integration
         uses: actions/upload-artifact@v4
         with:
-          name: uc-intg-heos-2.1.3-custom-aarch64
-          path: release/uc-intg-heos-2.1.3-custom-aarch64.tar.gz
+          name: uc-intg-heos-2.1.3-aarch64
+          path: uc-intg-heos-2.1.3-aarch64.tar.gz
+          if-no-files-found: error
+          retention-days: 7
