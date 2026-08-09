@@ -1,4 +1,4 @@
-name: Build HEOS Custom 1.2.2
+name: Build HEOS Custom 1.2.4
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ env:
 
 jobs:
   build:
-    name: Build ARM64 Custom HEOS 1.2.2
+    name: Build ARM64 Custom HEOS 1.2.4
     runs-on: ubuntu-24.04
 
     steps:
@@ -29,7 +29,7 @@ jobs:
 
       - name: Apply custom remote patch
         run: |
-          python3 patch_remote_1.2.2.py
+          python3 patch_remote_1.2.4.py
           python3 -m py_compile uc_intg_heos/remote.py
 
       - name: Create valid custom driver metadata
@@ -46,7 +46,7 @@ jobs:
 
           data = json.loads(raw)
           data["driver_id"] = "heos-custom"
-          data["version"] = "1.2.2"
+          data["version"] = "1.2.4"
 
           data["name"] = {"en": "HEOS Custom"}
           data["description"] = {
@@ -111,11 +111,11 @@ jobs:
           p = Path("artifacts/driver.json")
           data = json.loads(p.read_text(encoding="utf-8"))
           assert data["driver_id"] == "heos-custom"
-          assert data["version"] == "1.2.2"
+          assert data["version"] == "1.2.4"
           print("Archive metadata OK")
           PY
 
-          tar czvf uc-intg-heos-custom-1.2.2-aarch64.tar.gz \
+          tar czvf uc-intg-heos-custom-1.2.4-aarch64.tar.gz \
             -C artifacts .
 
       - name: Verify final archive
@@ -124,7 +124,7 @@ jobs:
           import json
           import tarfile
 
-          archive = "uc-intg-heos-custom-1.2.2-aarch64.tar.gz"
+          archive = "uc-intg-heos-custom-1.2.4-aarch64.tar.gz"
 
           with tarfile.open(archive, "r:gz") as tar:
               names = {n.lstrip("./") for n in tar.getnames()}
@@ -137,7 +137,7 @@ jobs:
               )
               data = json.loads(tar.extractfile(member).read().decode("utf-8"))
               assert data["driver_id"] == "heos-custom"
-              assert data["version"] == "1.2.2"
+              assert data["version"] == "1.2.4"
 
           print("Final archive validation OK")
           PY
@@ -145,7 +145,7 @@ jobs:
       - name: Upload finished integration
         uses: actions/upload-artifact@v4
         with:
-          name: uc-intg-heos-custom-1.2.2-aarch64
-          path: uc-intg-heos-custom-1.2.2-aarch64.tar.gz
+          name: uc-intg-heos-custom-1.2.4-aarch64
+          path: uc-intg-heos-custom-1.2.4-aarch64.tar.gz
           if-no-files-found: error
           retention-days: 14
