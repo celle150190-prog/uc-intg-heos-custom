@@ -9,7 +9,7 @@ env:
 
 jobs:
   build:
-    name: Build ARM64 Custom HEOS 1.2.0
+    name: Build ARM64 Custom HEOS 1.2.1
     runs-on: ubuntu-24.04
 
     steps:
