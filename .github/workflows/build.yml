@@ -29,7 +29,7 @@ jobs:
 
       - name: Apply custom patches
         run: |
-          python3 patch_remote_1.2.5.py
+          python3 patch_remote_1.2.6.py
           python3 patch_media_player_1.2.6.py
           python3 -m py_compile uc_intg_heos/remote.py uc_intg_heos/media_player.py
 
