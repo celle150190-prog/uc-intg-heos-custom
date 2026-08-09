@@ -107,34 +107,6 @@ if old_np not in s:
     raise SystemExit("Media NEXT/PREVIOUS handlers not found")
 s = s.replace(old_np, new_np, 1)
 
-old_select = """                case Commands.SELECT_SOURCE:
-                    source = params.get("source", "")
-                    if not source:
-                        return StatusCodes.BAD_REQUEST
-                    found = await self._device.play_source_by_name(self._player_id, source)
-                    if not found:
-                        _LOG.warning("Source not found: %s", source)
-                        return StatusCodes.BAD_REQUEST
-"""
-new_select = """                case Commands.SELECT_SOURCE:
-                    source = params.get("source", "")
-                    if not source:
-                        return StatusCodes.BAD_REQUEST
-                    favorite_id = next((
-                        (favorite_id for favorite_id, favorite in self._device.favorites.items()
-                         if favorite.name == source),
-                        None,
-                    )
-                    found = await self._device.play_source_by_name(self._player_id, source)
-                    if not found:
-                        _LOG.warning("Source not found: %s", source)
-                        return StatusCodes.BAD_REQUEST
-                    if favorite_id is not None:
-                        self._current_favorite_id = favorite_id
-"""
-if old_select not in s:
-    raise SystemExit("SELECT_SOURCE handler not found")
-s = s.replace(old_select, new_select, 1)
 
 ast.parse(s)
 p.write_text(s, encoding="utf-8")
