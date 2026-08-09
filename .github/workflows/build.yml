@@ -1,4 +1,4 @@
-name: Build HEOS Custom 2.1.3
+name: Build HEOS Custom 2.1.4
 
 on:
   workflow_dispatch:
@@ -16,10 +16,9 @@ jobs:
       - name: Checkout custom repository
         uses: actions/checkout@v4
 
-      - name: Download HEOS 2.1.2 source
+      - name: Download exact HEOS 2.1.2 source
         run: |
-          git clone --depth 1 --branch v2.1.2 \
-            https://github.com/mase1981/uc-intg-heos.git upstream
+          git clone --depth 1 --branch v2.1.2 https://github.com/mase1981/uc-intg-heos.git upstream
 
       - name: Copy original HEOS source
         run: |
@@ -27,21 +26,19 @@ jobs:
           cp upstream/driver.json .
           cp upstream/requirements.txt .
 
-      - name: Apply custom remote
+      - name: Apply custom remote 2.1.4
         run: |
-          python3 patch_remote.py
+          python3 patch_remote_2.1.4.py
           python3 -m py_compile uc_intg_heos/remote.py
 
       - name: Set custom version
         run: |
           python3 - <<'PY'
           import json
-
           with open("driver.json", "r", encoding="utf-8") as f:
               data = json.load(f)
-
-          data["version"] = "2.1.3"
-
+          data["version"] = "2.1.4"
+          data["description"]["en"] = "HEOS integration with favorites-only remote UI and Denon AVR power/subwoofer controls."
           with open("driver.json", "w", encoding="utf-8") as f:
               json.dump(data, f, indent=2, ensure_ascii=False)
               f.write("\n")
@@ -50,14 +47,8 @@ jobs:
       - name: Enable ARM64 emulation
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            qemu-system-arm \
-            binfmt-support \
-            qemu-user-static
-
-          docker run --rm --privileged \
-            multiarch/qemu-user-static \
-            --reset -p yes
+          sudo apt-get install -y qemu-system-arm binfmt-support qemu-user-static
+          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
       - name: Build ARM64
         run: |
@@ -70,9 +61,7 @@ jobs:
             bash -c \
             "cd /workspace && \
              python -m pip install -r requirements.txt && \
-             pyinstaller \
-             --clean \
-             --onedir \
+             pyinstaller --clean --onedir \
              --name intg-${INTG_NAME} \
              --collect-all zeroconf \
              --add-data driver.json:. \
@@ -81,24 +70,15 @@ jobs:
       - name: Create Remote 3 package
         run: |
           mkdir -p artifacts/bin
-
-          cp -r dist/intg-${INTG_NAME}/* \
-            artifacts/bin/
-
-          mv \
-            artifacts/bin/intg-${INTG_NAME} \
-            artifacts/bin/driver
-
+          cp -r dist/intg-${INTG_NAME}/* artifacts/bin/
+          mv artifacts/bin/intg-${INTG_NAME} artifacts/bin/driver
           cp driver.json artifacts/
-
-          tar czvf \
-            uc-intg-heos-2.1.3-custom-aarch64.tar.gz \
-            -C artifacts .
+          tar czvf uc-intg-heos-2.1.4-custom-aarch64.tar.gz -C artifacts .
 
       - name: Upload finished integration
         uses: actions/upload-artifact@v4
         with:
-          name: uc-intg-heos-2.1.3-custom-aarch64
-          path: uc-intg-heos-2.1.3-custom-aarch64.tar.gz
+          name: uc-intg-heos-2.1.4-custom-aarch64
+          path: uc-intg-heos-2.1.4-custom-aarch64.tar.gz
           if-no-files-found: error
           retention-days: 7
