@@ -1,4 +1,4 @@
-name: Build HEOS Custom 1.2
+name: Build HEOS Custom 1.2.0
 
 on:
   workflow_dispatch:
@@ -37,7 +37,7 @@ jobs:
           import json
           with open("driver.json", "r", encoding="utf-8") as f:
               data = json.load(f)
-          data["version"] = "1.2"
+          data["version"] = "1.2.0"
           data["description"]["en"] = "HEOS integration with favorites-only remote UI and automatic Denon AVR TCP controls."
           with open("driver.json", "w", encoding="utf-8") as f:
               json.dump(data, f, indent=2, ensure_ascii=False)
@@ -73,12 +73,12 @@ jobs:
           cp -r dist/intg-${INTG_NAME}/* artifacts/bin/
           mv artifacts/bin/intg-${INTG_NAME} artifacts/bin/driver
           cp driver.json artifacts/
-          tar czvf uc-intg-heos-1.2-custom-aarch64.tar.gz -C artifacts .
+          tar czvf uc-intg-heos-1.2.0-custom-aarch64.tar.gz -C artifacts .
 
       - name: Upload finished integration
         uses: actions/upload-artifact@v4
         with:
-          name: uc-intg-heos-1.2-custom-aarch64
-          path: uc-intg-heos-1.2-custom-aarch64.tar.gz
+          name: uc-intg-heos-1.2.0-custom-aarch64
+          path: uc-intg-heos-1.2.0-custom-aarch64.tar.gz
           if-no-files-found: error
           retention-days: 7
