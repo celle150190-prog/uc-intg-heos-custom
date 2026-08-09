@@ -120,15 +120,18 @@ new_select = """                case Commands.SELECT_SOURCE:
                     source = params.get("source", "")
                     if not source:
                         return StatusCodes.BAD_REQUEST
-                                        favorite_id = None
+
+                    favorite_id = None
                     for candidate_id, favorite in self._device.favorites.items():
                         if favorite.name == source:
                             favorite_id = candidate_id
                             break
+
                     found = await self._device.play_source_by_name(self._player_id, source)
                     if not found:
                         _LOG.warning("Source not found: %s", source)
                         return StatusCodes.BAD_REQUEST
+
                     if favorite_id is not None:
                         self._current_favorite_id = favorite_id
 """
