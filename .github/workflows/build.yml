@@ -28,7 +28,7 @@ jobs:
 
       - name: Apply custom remote 2.1.4
         run: |
-          python3 patch_remote_2.1.4.py
+          python3 patch_remote_2.1.4_fixed.py
           python3 -m py_compile uc_intg_heos/remote.py
 
       - name: Set custom version
