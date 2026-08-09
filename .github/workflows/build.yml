@@ -1,4 +1,4 @@
-name: Build HEOS Custom 2.1.4
+name: Build HEOS Custom 1.2
 
 on:
   workflow_dispatch:
@@ -26,9 +26,9 @@ jobs:
           cp upstream/driver.json .
           cp upstream/requirements.txt .
 
-      - name: Apply custom remote 2.1.4
+      - name: Apply custom remote 1.2
         run: |
-          python3 patch_remote_2.1.4_fixed.py
+          python3 patch_remote_1.2.py
           python3 -m py_compile uc_intg_heos/remote.py
 
       - name: Set custom version
@@ -37,11 +37,11 @@ jobs:
           import json
           with open("driver.json", "r", encoding="utf-8") as f:
               data = json.load(f)
-          data["version"] = "2.1.4"
-          data["description"]["en"] = "HEOS integration with favorites-only remote UI and Denon AVR power/subwoofer controls."
+          data["version"] = "1.2"
+          data["description"]["en"] = "HEOS integration with favorites-only remote UI and automatic Denon AVR TCP controls."
           with open("driver.json", "w", encoding="utf-8") as f:
               json.dump(data, f, indent=2, ensure_ascii=False)
-              f.write("\n")
+              f.write("\\n")
           PY
 
       - name: Enable ARM64 emulation
@@ -73,12 +73,12 @@ jobs:
           cp -r dist/intg-${INTG_NAME}/* artifacts/bin/
           mv artifacts/bin/intg-${INTG_NAME} artifacts/bin/driver
           cp driver.json artifacts/
-          tar czvf uc-intg-heos-2.1.4-custom-aarch64.tar.gz -C artifacts .
+          tar czvf uc-intg-heos-1.2-custom-aarch64.tar.gz -C artifacts .
 
       - name: Upload finished integration
         uses: actions/upload-artifact@v4
         with:
-          name: uc-intg-heos-2.1.4-custom-aarch64
-          path: uc-intg-heos-2.1.4-custom-aarch64.tar.gz
+          name: uc-intg-heos-1.2-custom-aarch64
+          path: uc-intg-heos-1.2-custom-aarch64.tar.gz
           if-no-files-found: error
           retention-days: 7
