@@ -1,0 +1,59 @@
+name: Build HEOS Custom ARM64
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ARM64 cross-build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static binfmt-support
+
+      - name: Build ARM64 package
+        run: |
+          docker run --rm \
+            --platform linux/arm64 \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            python:3.11-bookworm \
+            bash -c '
+              python -m pip install --upgrade pip
+              pip install pyinstaller
+              pip install -r requirements.txt
+              pyinstaller \
+                --clean \
+                --onedir \
+                --name intg-heos \
+                --collect-all zeroconf \
+                --add-data "driver.json:." \
+                uc_intg_heos/__init__.py
+            '
+
+      - name: Create integration archive
+        run: |
+          mkdir -p release
+          cp driver.json release/
+          cp -r dist/intg-heos release/driver
+          tar -czf release/uc-intg-heos-2.1.3-custom-aarch64.tar.gz \
+            -C release driver.json driver
+
+      - name: Upload ARM64 integration
+        uses: actions/upload-artifact@v4
+        with:
+          name: uc-intg-heos-2.1.3-custom-aarch64
+          path: release/uc-intg-heos-2.1.3-custom-aarch64.tar.gz
