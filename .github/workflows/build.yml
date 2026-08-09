@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
 
 env:
-  INTG_NAME: heos
+  INTG_NAME: heos-custom
   PYTHON_VER: 3.11.12-0.3.0
 
 jobs:
   build:
-    name: Build ARM64 Integration
+    name: Build ARM64 Custom HEOS 1.2.0
     runs-on: ubuntu-24.04
 
     steps:
@@ -18,7 +18,8 @@ jobs:
 
       - name: Download exact HEOS 2.1.2 source
         run: |
-          git clone --depth 1 --branch v2.1.2 https://github.com/mase1981/uc-intg-heos.git upstream
+          git clone --depth 1 --branch v2.1.2 \
+            https://github.com/mase1981/uc-intg-heos.git upstream
 
       - name: Copy original HEOS source
         run: |
@@ -26,31 +27,76 @@ jobs:
           cp upstream/driver.json .
           cp upstream/requirements.txt .
 
-      - name: Apply custom remote 1.2
+      - name: Apply custom remote patch
         run: |
           python3 patch_remote_1.2.py
           python3 -m py_compile uc_intg_heos/remote.py
 
-      - name: Set custom version
+      - name: Create valid custom driver metadata
         run: |
           python3 - <<'PY'
           import json
-          with open("driver.json", "r", encoding="utf-8") as f:
-              data = json.load(f)
+          from pathlib import Path
+
+          path = Path("driver.json")
+          raw = path.read_text(encoding="utf-8").strip()
+
+          # Some source files may contain a literal "\n" after the JSON.
+          # Remove it before parsing so the generated metadata is always valid.
+          if raw.endswith("\\n"):
+              raw = raw[:-2].rstrip()
+
+          data = json.loads(raw)
+
+          # Custom drivers must use their own driver_id.
+          data["driver_id"] = "heos-custom"
           data["version"] = "1.2.0"
-          data["description"]["en"] = "HEOS integration with favorites-only remote UI and automatic Denon AVR TCP controls."
-          with open("driver.json", "w", encoding="utf-8") as f:
-              json.dump(data, f, indent=2, ensure_ascii=False)
-              f.write("\\n")
+
+          data["name"] = {
+              "en": "HEOS Custom"
+          }
+
+          data["description"] = {
+              "en": (
+                  "Custom HEOS integration with favorites-only remote UI "
+                  "and Denon AVR controls."
+              ),
+              "de": (
+                  "Benutzerdefinierte HEOS-Integration mit Senderansicht "
+                  "und Denon-AVR-Steuerung."
+              )
+          }
+
+          data["developer"] = {
+              "name": "celle150190-prog",
+              "url": "https://github.com/celle150190-prog"
+          }
+
+          data["home_page"] = (
+              "https://github.com/celle150190-prog/uc-intg-heos-custom"
+          )
+
+          # Write strict JSON with a real newline, never a literal "\n".
+          path.write_text(
+              json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+              encoding="utf-8"
+          )
+
+          # Validate the exact file that will be packed.
+          json.loads(path.read_text(encoding="utf-8"))
+          print("driver.json valid")
+          print("driver_id:", data["driver_id"])
+          print("version:", data["version"])
           PY
 
       - name: Enable ARM64 emulation
         run: |
           sudo apt-get update
           sudo apt-get install -y qemu-system-arm binfmt-support qemu-user-static
-          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+          docker run --rm --privileged \
+            multiarch/qemu-user-static --reset -p yes
 
-      - name: Build ARM64
+      - name: Build ARM64 driver
         run: |
           docker run --rm \
             --name heos-custom-builder \
@@ -62,23 +108,70 @@ jobs:
             "cd /workspace && \
              python -m pip install -r requirements.txt && \
              pyinstaller --clean --onedir \
-             --name intg-${INTG_NAME} \
+             --name intg-heos-custom \
              --collect-all zeroconf \
              --add-data driver.json:. \
              uc_intg_heos/__init__.py"
 
-      - name: Create Remote 3 package
+      - name: Create Remote 3 installation archive
         run: |
+          rm -rf artifacts
           mkdir -p artifacts/bin
-          cp -r dist/intg-${INTG_NAME}/* artifacts/bin/
-          mv artifacts/bin/intg-${INTG_NAME} artifacts/bin/driver
-          cp driver.json artifacts/
-          tar czvf uc-intg-heos-1.2.0-custom-aarch64.tar.gz -C artifacts .
+
+          cp -r dist/intg-heos-custom/* artifacts/bin/
+          mv artifacts/bin/intg-heos-custom artifacts/bin/driver
+          cp driver.json artifacts/driver.json
+
+          # Verify archive contents before creating it.
+          test -f artifacts/driver.json
+          test -x artifacts/bin/driver || chmod +x artifacts/bin/driver
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path("artifacts/driver.json")
+          data = json.loads(p.read_text(encoding="utf-8"))
+
+          assert data["driver_id"] == "heos-custom"
+          assert data["version"] == "1.2.0"
+
+          print("Archive metadata OK")
+          PY
+
+          tar czvf uc-intg-heos-custom-1.2.0-aarch64.tar.gz \
+            -C artifacts .
+
+      - name: Verify final archive
+        run: |
+          python3 - <<'PY'
+          import json
+          import tarfile
+
+          archive = "uc-intg-heos-custom-1.2.0-aarch64.tar.gz"
+
+          with tarfile.open(archive, "r:gz") as tar:
+              names = {n.lstrip("./") for n in tar.getnames()}
+              assert "driver.json" in names
+              assert "bin/driver" in names
+
+              member = next(
+                  m for m in tar.getmembers()
+                  if m.name.lstrip("./") == "driver.json"
+              )
+
+              data = json.loads(tar.extractfile(member).read().decode("utf-8"))
+
+              assert data["driver_id"] == "heos-custom"
+              assert data["version"] == "1.2.0"
+
+          print("Final archive validation OK")
+          PY
 
       - name: Upload finished integration
         uses: actions/upload-artifact@v4
         with:
-          name: uc-intg-heos-1.2.0-custom-aarch64
-          path: uc-intg-heos-1.2.0-custom-aarch64.tar.gz
+          name: uc-intg-heos-custom-1.2.0-aarch64
+          path: uc-intg-heos-custom-1.2.0-aarch64.tar.gz
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14
