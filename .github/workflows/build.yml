@@ -30,11 +30,8 @@ jobs:
       - name: Apply custom patches
         run: |
           python3 patch_media_player_1.2.9.py
-          python3 patch_browse_button_1.2.10.py
           python3 -m py_compile uc_intg_heos/media_player.py
-          python3 -m py_compile uc_intg_heos/driver.py
-          python3 -m py_compile uc_intg_heos/browse_button.py
-
+                    
       - name: Create valid custom driver metadata
         run: |
           python3 - <<'PY'
