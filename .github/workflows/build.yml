@@ -1,4 +1,4 @@
-name: Build HEOS Custom 1.2.10
+name: Build HEOS Custom 1.2.11
 
 on:
   workflow_dispatch:
