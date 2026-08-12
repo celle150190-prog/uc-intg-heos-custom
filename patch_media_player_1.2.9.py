@@ -32,11 +32,19 @@ old_features = """FEATURES = [
 new_features = """FEATURES = [
     Features.ON_OFF,
     Features.PLAY_PAUSE,
+    Features.STOP,
     Features.NEXT,
     Features.PREVIOUS,
     Features.VOLUME,
     Features.VOLUME_UP_DOWN,
     Features.MUTE_TOGGLE,
+    Features.MUTE,
+    Features.UNMUTE,
+    Features.REPEAT,
+    Features.SHUFFLE,
+    Features.SELECT_SOURCE,
+    Features.MEDIA_DURATION,
+    Features.MEDIA_POSITION,
     Features.MEDIA_TITLE,
     Features.MEDIA_ARTIST,
     Features.MEDIA_ALBUM,
@@ -368,6 +376,27 @@ if old_select not in s:
     raise SystemExit("SELECT_SOURCE handler not found")
 s = s.replace(old_select, new_select, 1)
 
+# ---------------------------------------------------------------------------
+# 7. Make Browse Media open the live HEOS favorites directly.
+#    The original HEOS 2.1.2 browse() implementation is retained; only its
+#    root routing is changed. Favorites are refreshed before opening Browse.
+# ---------------------------------------------------------------------------
+old_browse = """            if not media_id or media_id == \"root\":
+                raw_items = await self._device.browse_root()
+            elif media_id == \"favorites\":
+                raw_items = await self._device.browse_favorites()
+"""
+new_browse = """            if not media_id or media_id == \"root\":
+                await self._refresh_favorites_if_due()
+                raw_items = await self._device.browse_favorites()
+            elif media_id == \"favorites\":
+                await self._refresh_favorites_if_due()
+                raw_items = await self._device.browse_favorites()
+"""
+if old_browse not in s:
+    raise SystemExit("Original browse root block not found")
+s = s.replace(old_browse, new_browse, 1)
+
 ast.parse(s)
 p.write_text(s, encoding="utf-8")
-print("patch_media_player_1.2.8.py: patch applied and Python syntax validated")
+print("patch_media_player_1.2.9.py: patch applied and Python syntax validated")
