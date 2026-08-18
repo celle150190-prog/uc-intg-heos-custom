@@ -1,6 +1,6 @@
 {
   "driver_id": "heos-media-standalone",
-  "version": "2.1.2-standalone.1",
+  "version": "2.1.2-standalone.2",
   "min_core_api": "0.22.0",
   "name": {
     "en": "HEOS Integration (Media UI Standalone)"
@@ -14,5 +14,25 @@
     "url": "https://github.com/mase1981/uc-intg-heos"
   },
   "home_page": "https://github.com/mase1981/uc-intg-heos",
-  "release_date": "2026-08-18"
+  "release_date": "2026-08-18",
+  "setup_data_schema": {
+    "title": {
+      "en": "HEOS Integration Setup"
+    },
+    "settings": [
+      {
+        "id": "info",
+        "label": {
+          "en": "Account-Based Setup"
+        },
+        "field": {
+          "label": {
+            "value": {
+              "en": "Enter your HEOS device IP address and account credentials on the next screen. All HEOS devices on your account will be automatically discovered."
+            }
+          }
+        }
+      }
+    ]
+  }
 }
