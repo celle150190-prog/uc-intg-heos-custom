@@ -19,20 +19,21 @@ jobs:
       - name: Apply Media UI patch
         run: python patches/apply_media_ui.py
 
-      - name: Verify patched media player
-        working-directory: upstream
-        run: python -m py_compile uc_intg_heos/media_player.py
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install pinned v2.1.2 dependencies
         working-directory: upstream
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller
+          pip install 'ucapi==0.7.0' 'ucapi-framework==1.9.5' 'pyheos==1.0.5'
+          pip install pyinstaller
+
+      - name: Syntax check
+        working-directory: upstream
+        run: python -m compileall -q uc_intg_heos
 
       - name: Prepare custom metadata
         working-directory: upstream
@@ -41,7 +42,7 @@ jobs:
       - name: Build
         working-directory: upstream
         run: |
-          rm -rf build dist package
+          rm -rf build dist
           pyinstaller --noconfirm --clean --onedir --name driver \
             --add-data 'driver.json:.' \
             --hidden-import=uc_intg_heos \
@@ -50,19 +51,14 @@ jobs:
       - name: Assemble Remote 3 archive
         working-directory: upstream
         run: |
+          rm -rf package
           mkdir -p package/bin
           cp -a dist/driver/. package/bin/
           cp driver.json package/driver.json
-          tar -C package -czf ../uc-intg-heos-2.1.2-custom.3-aarch64.tar.gz .
+          tar -C package -czf ../uc-intg-heos-2.1.2-custom.6-aarch64.tar.gz .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: uc-intg-heos-2.1.2-custom.3-aarch64
-          path: uc-intg-heos-2.1.2-custom.3-aarch64.tar.gz
-
-      - name: Create GitHub release asset
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: uc-intg-heos-2.1.2-custom.3-aarch64.tar.gz
+          name: uc-intg-heos-2.1.2-custom.6-aarch64
+          path: upstream/../uc-intg-heos-2.1.2-custom.6-aarch64.tar.gz
