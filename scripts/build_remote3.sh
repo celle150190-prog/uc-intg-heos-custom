@@ -11,7 +11,7 @@ git -C "$UPSTREAM_DIR" apply "$(cd "$(dirname "$0")/.." && pwd)/patches/remote_d
 docker run --rm --platform linux/arm64 \
   -v "$(cd "$UPSTREAM_DIR" && pwd):/workspace" \
   -w /workspace "$IMAGE" \
-  bash -lc 'python -m pip install -r requirements.txt && pyinstaller --clean --onedir --name driver driver.py'
+  bash -lc 'set -euo pipefail; DRIVER_PATH="$(find . -type f -name driver.py -print -quit)"; test -n "${DRIVER_PATH}"; python -m pip install -r requirements.txt; pyinstaller --clean --onedir --name driver "${DRIVER_PATH}"'
 
 rm -rf ./artifacts
 mkdir -p ./artifacts/bin
