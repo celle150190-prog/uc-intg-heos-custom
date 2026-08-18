@@ -1,15 +1,41 @@
-# HEOS Custom – Media UI
+# HEOS Remote 3 – Denon AVR UI Patch
 
-Custom build based on `mase1981/uc-intg-heos` 2.1.2 for Unfolded Circle Remote 3.
+Dieses Projekt basiert **ausschließlich auf `mase1981/uc-intg-heos` v2.1.2**.
+Die Denon/Marantz-Integration wird **nicht** als Integrationsbasis verwendet. Ihre Kommandotabelle dient nur als Referenz für die korrekten Denon-AVR-Telegramme.
 
-## Änderungen
+## Gewünschtes Verhalten
 
-- Media-UI `Next` / `Previous` navigieren durch die gespeicherten HEOS-Favoriten statt durch den aktuellen Track.
-- Lautstärke `+` / `-` arbeitet in 1-dB-Schritten.
-- Die Media-UI stellt `Channel Up/Down` bereit; diese steuern beim AVR Subwoofer 1 über `CVSW UP/DOWN`.
-- Bei einem als AVR erkannten HEOS-Player wird `HEOS` als auswählbare Media-Quelle angeboten. Die Auswahl startet/resumiert HEOS, sodass die Quelle in Aktivitäten verwendet werden kann.
-- Keine Änderungen an der separaten Remote-UI.
+Für als AVR erkannte HEOS-Player:
+
+- **Power OFF:** Denon `PWSTANDBY`
+- **Power ON:** Denon `PWON`
+- **Lauter:** Denon `MVUP` zweimal pro Tastendruck = 1 dB
+- **Leiser:** Denon `MVDOWN` zweimal pro Tastendruck = 1 dB
+- **CH +:** Denon Subwoofer 1 `CVSW UP`
+- **CH -:** Denon Subwoofer 1 `CVSW DOWN`
+- **PREV:** vorheriger HEOS-Favorit
+- **NEXT:** nächster HEOS-Favorit
+- **PLAY/PAUSE/STOP/MUTE:** vorhandene HEOS-Funktion bleibt bestehen
+
+Bei Nicht-AVR-HEOS-Playern bleibt das normale HEOS-Verhalten erhalten, soweit es von v2.1.2 vorgegeben ist.
+
+## Denon-Kommunikation
+
+Für AVR-Befehle wird kein Denon-Treiber eingebunden. Der HEOS-Player liefert die IP-Adresse des AVR; der Remote-Handler öffnet dafür direkt eine TCP-Verbindung auf Port 23 und sendet die dokumentierten Denon-Telnet-Kommandos mit `\\r`.
+
+Der AVR muss Netzwerksteuerung für Steuerung aus Standby unterstützen/aktiviert haben.
+
+## Upstream-Basis
+
+- HEOS v2.1.2: https://github.com/mase1981/uc-intg-heos/tree/v2.1.2
+- Die Patch-Datei in `patches/` ändert ausschließlich `uc_intg_heos/remote.py`.
 
 ## Build
 
-Der GitHub-Action-Workflow holt exakt den Upstream-Stand 2.1.2, wendet den Patch an und baut ein aarch64-TAR.GZ für die Remote 3.
+Das Repo ist bewusst als **Patch-Projekt** aufgebaut: Die restliche HEOS-2.1.2-Integration bleibt unverändert und wird beim Build aus dem offiziellen Upstream-Tag bezogen.
+
+```bash
+./scripts/apply_patch.sh ../uc-intg-heos
+```
+
+Danach kann der normale Build der HEOS-2.1.2-Integration ausgeführt werden.

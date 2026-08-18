@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
+*.pyo
 .venv/
-dist/
+.env
 build/
-*.tar.gz
+dist/
