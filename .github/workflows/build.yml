@@ -1,1 +1,65 @@
+name: Build HEOS Custom
 
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build aarch64 custom integration
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout custom project
+        uses: actions/checkout@v4
+
+      - name: Checkout upstream 2.1.2
+        run: git clone --depth 1 --branch 2.1.2 https://github.com/mase1981/uc-intg-heos.git upstream
+
+      - name: Apply Media UI patch
+        run: python patches/apply_media_ui.py
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: upstream
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Prepare custom metadata
+        working-directory: upstream
+        run: cp ../driver.json ./driver.json
+
+      - name: Build
+        working-directory: upstream
+        run: |
+          rm -rf build dist
+          pyinstaller --noconfirm --clean --onedir --name driver \
+            --add-data 'driver.json:.' \
+            --hidden-import=uc_intg_heos \
+            uc_intg_heos/__main__.py
+
+      - name: Assemble Remote 3 archive
+        working-directory: upstream
+        run: |
+          rm -rf package
+          mkdir -p package/bin
+          cp -a dist/driver/. package/bin/
+          cp driver.json package/driver.json
+          tar -C package -czf ../uc-intg-heos-2.1.2-custom.2-aarch64.tar.gz .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: uc-intg-heos-2.1.2-custom.2-aarch64
+          path: uc-intg-heos-2.1.2-custom.2-aarch64.tar.gz
+
+      - name: Create GitHub release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: upstream/../uc-intg-heos-2.1.2-custom.2-aarch64.tar.gz
