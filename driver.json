@@ -1,18 +1,17 @@
 {
-  "driver_id": "heos-media-standalone-v12",
-  "version": "2.1.2-standalone.5",
+  "driver_id": "heos-remote-ui-v1",
+  "version": "2.1.2-remoteui.1",
   "min_core_api": "0.22.0",
   "name": {
-    "en": "HEOS Integration (Media UI Standalone v12)"
+    "en": "HEOS Integration (Remote UI Custom)"
   },
   "icon": "uc:music",
   "description": {
-    "en": "Standalone HEOS integration with Media UI-only favorite navigation, 1-step volume, Subwoofer 1 channel controls, artwork URL normalization and HEOS AVR source selection."
+    "en": "Standalone HEOS 2.1.2 build with custom Remote UI controls for favorites, 1 dB AVR volume and Subwoofer 1."
   },
   "developer": {
-    "name": "Meir Miyara / Custom build",
-    "email": "meir.miyara@gmail.com",
-    "url": "https://github.com/mase1981"
+    "name": "Custom build",
+    "url": "https://github.com/mase1981/uc-intg-heos"
   },
   "home_page": "https://github.com/mase1981/uc-intg-heos",
   "setup_data_schema": {
