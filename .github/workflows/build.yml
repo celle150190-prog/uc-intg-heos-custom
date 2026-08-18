@@ -1,1 +1,101 @@
+name: Build HEOS 2.1.2 Remote 3 custom integration
 
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ARM64 Remote 3 archive
+    runs-on: ubuntu-latest
+    env:
+      UPSTREAM_REPO: https://github.com/mase1981/uc-intg-heos.git
+      UPSTREAM_TAG: v2.1.2
+      PYINSTALLER_IMAGE: unfoldedcircle/r2-pyinstaller:3.11.13
+      ARTIFACT_NAME: uc-intg-heos-denon-ui-2.1.2-aarch64.tar.gz
+
+    steps:
+      - name: Checkout custom project
+        uses: actions/checkout@v4
+
+      - name: Setup QEMU for ARM64
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Clone exact HEOS 2.1.2 source
+        run: |
+          rm -rf /tmp/heos-source
+          git clone --depth 1 --branch "${UPSTREAM_TAG}" "${UPSTREAM_REPO}" /tmp/heos-source
+
+      - name: Verify upstream version and locate driver
+        working-directory: /tmp/heos-source
+        run: |
+          DRIVER_PATH="$(find . -type f -name 'driver.py' -print -quit)"
+          DRIVER_JSON="$(find . -maxdepth 3 -type f -name 'driver.json' -print -quit)"
+
+          test -n "${DRIVER_PATH}"
+          test -f "${DRIVER_PATH}"
+          test -n "${DRIVER_JSON}"
+          test -f "${DRIVER_JSON}"
+          grep -q '"version": "2.1.2"' "${DRIVER_JSON}"
+
+          echo "DRIVER_PATH=${DRIVER_PATH}" >> "$GITHUB_ENV"
+          echo "DRIVER_JSON=${DRIVER_JSON}" >> "$GITHUB_ENV"
+
+          echo "Using driver: ${DRIVER_PATH}"
+          echo "Using metadata: ${DRIVER_JSON}"
+
+      - name: Apply HEOS Remote UI patch
+        run: |
+          git -C /tmp/heos-source apply --check "$GITHUB_WORKSPACE/patches/remote_denon_ui.patch"
+          git -C /tmp/heos-source apply "$GITHUB_WORKSPACE/patches/remote_denon_ui.patch"
+
+      - name: Validate source after patch
+        working-directory: /tmp/heos-source
+        run: |
+          python3 -m py_compile uc_intg_heos/remote.py
+          grep -q 'PWSTANDBY' uc_intg_heos/remote.py
+          grep -q 'PWON' uc_intg_heos/remote.py
+          grep -q 'CVSW UP' uc_intg_heos/remote.py
+          grep -q 'CVSW DOWN' uc_intg_heos/remote.py
+          grep -q 'play_preset_station' uc_intg_heos/remote.py
+
+      - name: Build ARM64 PyInstaller distribution
+        run: |
+          docker run --rm \
+            --platform linux/arm64 \
+            -v /tmp/heos-source:/workspace \
+            -w /workspace \
+            "${PYINSTALLER_IMAGE}" \
+            bash -lc '
+              set -euo pipefail
+              python -m pip install --upgrade pip
+              python -m pip install -r requirements.txt
+              pyinstaller --clean --onedir --name driver driver.py
+            '
+
+      - name: Create Remote 3 custom integration archive
+        run: |
+          rm -rf /tmp/artifacts
+          mkdir -p /tmp/artifacts/bin
+          cp -a /tmp/heos-source/dist/driver/. /tmp/artifacts/bin/
+          cp "/tmp/heos-source/${DRIVER_JSON#./}" /tmp/artifacts/driver.json
+          tar czf "${ARTIFACT_NAME}" -C /tmp/artifacts .
+          test -f "${ARTIFACT_NAME}"
+          tar -tzf "${ARTIFACT_NAME}" | grep -q '^./driver.json$'
+          tar -tzf "${ARTIFACT_NAME}" | grep -q '^./bin/driver$'
+          ls -lh "${ARTIFACT_NAME}"
+
+      - name: Upload Remote 3 archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: uc-intg-heos-denon-ui-2.1.2-aarch64
+          path: ${{ env.ARTIFACT_NAME }}
+          if-no-files-found: error
+          retention-days: 14
