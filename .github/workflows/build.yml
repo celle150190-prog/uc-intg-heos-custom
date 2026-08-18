@@ -55,10 +55,10 @@ jobs:
           mkdir -p package/bin
           cp -a dist/driver/. package/bin/
           cp driver.json package/driver.json
-          tar -C package -czf ../uc-intg-heos-2.1.2-standalone.1-aarch64.tar.gz .
+          tar -C package -czf ../uc-intg-heos-2.1.2-standalone.2-aarch64.tar.gz .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: uc-intg-heos-2.1.2-standalone.1-aarch64
-          path: uc-intg-heos-2.1.2-standalone.1-aarch64.tar.gz
+          name: uc-intg-heos-2.1.2-standalone.2-aarch64
+          path: uc-intg-heos-2.1.2-standalone.2-aarch64.tar.gz
