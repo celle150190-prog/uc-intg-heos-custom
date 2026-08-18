@@ -14,16 +14,18 @@ permissions:
 jobs:
   build:
     name: Build ARM64 Remote 3 archive
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       UPSTREAM_REPO: https://github.com/mase1981/uc-intg-heos.git
       UPSTREAM_TAG: v2.1.2
-      PYINSTALLER_IMAGE: docker.io/unfoldedcircle/r2-pyinstaller:3.11.13
+      PYTHON_VER: 3.11.12-0.3.0
+      PYINSTALLER_IMAGE: docker.io/unfoldedcircle/r2-pyinstaller:3.11.12-0.3.0
+      PYINSTALLER_NAME: intg-heos-denon-ui
       ARTIFACT_NAME: uc-intg-heos-denon-ui-2.1.2-aarch64.tar.gz
 
     steps:
       - name: Checkout custom project
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup QEMU for ARM64
         uses: docker/setup-qemu-action@v3
@@ -38,6 +40,7 @@ jobs:
 
       - name: Verify upstream source layout
         run: |
+          test -f /tmp/heos-source/uc_intg_heos/__init__.py
           test -f /tmp/heos-source/uc_intg_heos/driver.py
           test -f /tmp/heos-source/driver.json
           test -f /tmp/heos-source/requirements.txt
@@ -84,7 +87,7 @@ jobs:
 
       - name: Build ARM64 PyInstaller distribution
         run: |
-          docker run --rm \
+          docker run --rm --name builder \
             --platform=linux/arm64 \
             --user="$(id -u):$(id -g)" \
             -v /tmp/heos-source:/workspace \
@@ -92,19 +95,20 @@ jobs:
             "${PYINSTALLER_IMAGE}" \
             bash -lc '
               set -euo pipefail
-              PYTHON_VERSION="$(python --version | cut -d" " -f2 | cut -d. -f1,2)"
-              python -m pip install --user -r requirements.txt
-              export PATH="$HOME/.local/bin:$PATH"
-              export PYTHONPATH="$HOME/.local/lib/python${PYTHON_VERSION}/site-packages:${PYTHONPATH:-}"
-              python -m PyInstaller --clean --onedir --name driver -y uc_intg_heos/driver.py
-              test -x dist/driver/driver
+              python -m pip install -r requirements.txt
+              pyinstaller --clean --onedir --name "${PYINSTALLER_NAME}" \
+                --collect-all zeroconf \
+                --add-data driver.json:. \
+                uc_intg_heos/__init__.py
             '
 
       - name: Create Remote 3 custom integration archive
         run: |
           rm -rf /tmp/artifacts
           mkdir -p /tmp/artifacts/bin
-          cp -a /tmp/heos-source/dist/driver/. /tmp/artifacts/bin/
+          cp -a "/tmp/heos-source/dist/${PYINSTALLER_NAME}/." /tmp/artifacts/bin/
+          test -x "/tmp/artifacts/bin/${PYINSTALLER_NAME}"
+          mv "/tmp/artifacts/bin/${PYINSTALLER_NAME}" /tmp/artifacts/bin/driver
           cp driver.json /tmp/artifacts/driver.json
           test -f /tmp/artifacts/driver.json
           test -x /tmp/artifacts/bin/driver
@@ -115,7 +119,7 @@ jobs:
           ls -lh "${ARTIFACT_NAME}"
 
       - name: Upload Remote 3 archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: uc-intg-heos-denon-ui-2.1.2-aarch64
           path: ${{ env.ARTIFACT_NAME }}
