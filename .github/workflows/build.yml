@@ -18,7 +18,6 @@ jobs:
     env:
       UPSTREAM_REPO: https://github.com/mase1981/uc-intg-heos.git
       UPSTREAM_TAG: v2.1.2
-      PYTHON_VER: 3.11.12-0.3.0
       PYINSTALLER_IMAGE: docker.io/unfoldedcircle/r2-pyinstaller:3.11.12-0.3.0
       PYINSTALLER_NAME: intg-heos-denon-ui
       ARTIFACT_NAME: uc-intg-heos-denon-ui-2.1.2-aarch64.tar.gz
@@ -90,16 +89,19 @@ jobs:
           docker run --rm --name builder \
             --platform=linux/arm64 \
             --user="$(id -u):$(id -g)" \
+            -e PYINSTALLER_NAME="${PYINSTALLER_NAME}" \
             -v /tmp/heos-source:/workspace \
             -w /workspace \
             "${PYINSTALLER_IMAGE}" \
             bash -lc '
               set -euo pipefail
+              test -n "${PYINSTALLER_NAME}"
               python -m pip install -r requirements.txt
               pyinstaller --clean --onedir --name "${PYINSTALLER_NAME}" \
                 --collect-all zeroconf \
                 --add-data driver.json:. \
                 uc_intg_heos/__init__.py
+              test -x "dist/${PYINSTALLER_NAME}/${PYINSTALLER_NAME}"
             '
 
       - name: Create Remote 3 custom integration archive
