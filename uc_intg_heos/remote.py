@@ -232,7 +232,7 @@ class HeosRemote(RemoteEntity):
         await player.play_preset_station(self._favorite_index)
 
     async def _handle_command(
-        self, entity: remote.RemoteEntity, cmd_id: str, params: dict[str, Any] | None
+        self, entity: remote.Remote, cmd_id: str, params: dict[str, Any] | None
     ) -> StatusCodes:
         async with self._cmd_lock:
             command = (params or {}).get("command", cmd_id)
@@ -351,7 +351,7 @@ class HeosRemote(RemoteEntity):
                         f"GROUP_WITH_{target_name}",
                     )
                 except HeosError as err:
-                    _LOG.info("[%s] GROUP_WITH_%s ignored: %s", self._player_id, target_name, err)
+                    _LOG.info("[%s] GROUP_WITH_%s ignored (already grouped?): %s", self._player_id, target_name, err)
                 return
         _LOG.warning("Group target not found: %s", target_name)
 
@@ -363,11 +363,7 @@ class HeosRemote(RemoteEntity):
             except HeosError as err:
                 _LOG.warning(
                     "[%s] %s attempt %d/%d failed: %s",
-                    self._player_id,
-                    name,
-                    attempt + 1,
-                    retries,
-                    err,
+                    self._player_id, name, attempt + 1, retries, err,
                 )
                 if "Processing previous command" in str(err) and attempt < retries - 1:
                     await asyncio.sleep(1.0)
@@ -375,5 +371,7 @@ class HeosRemote(RemoteEntity):
                 raise
 
 
-def create_remotes(device_config: HeosDeviceConfig, device: HeosDevice) -> list[HeosRemote]:
+def create_remotes(
+    device_config: HeosDeviceConfig, device: HeosDevice
+) -> list[HeosRemote]:
     return [HeosRemote(device_config, device, player) for player in device.players.values()]
