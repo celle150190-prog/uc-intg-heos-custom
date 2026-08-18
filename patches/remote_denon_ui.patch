@@ -1,0 +1,256 @@
+diff --git a/uc_intg_heos/remote.py b/uc_intg_heos/remote.py
+--- a/uc_intg_heos/remote.py
++++ b/uc_intg_heos/remote.py
+@@ -22,6 +22,8 @@
+ _LOG = logging.getLogger(__name__)
+ 
+ COMMAND_RATE_LIMIT = 0.5
++DENON_TELNET_PORT = 23
++DENON_COMMAND_TIMEOUT = 1.5
+ 
+ 
+ def _safe_cmd_name(name: str) -> str:
+@@ -40,6 +42,8 @@
+         self._is_avr = device.is_avr(player)
+         self._last_cmd_time = 0.0
+         self._cmd_lock = asyncio.Lock()
++        self._favorite_indices: list[int] = []
++        self._favorite_index: int | None = None
+ 
+         entity_id = f"remote.{device_config.identifier}.{player.player_id}"
+         simple_commands = self._build_commands(device)
+@@ -48,11 +52,13 @@
+         button_mapping = [
+             create_btn_mapping(Buttons.PLAY, short="PLAY"),
+             create_btn_mapping(Buttons.STOP, short="STOP"),
+-            create_btn_mapping(Buttons.PREV, short="PREVIOUS"),
+-            create_btn_mapping(Buttons.NEXT, short="NEXT"),
++            create_btn_mapping(Buttons.PREV, short="PREVIOUS_FAVORITE"),
++            create_btn_mapping(Buttons.NEXT, short="NEXT_FAVORITE"),
+             create_btn_mapping(Buttons.VOLUME_UP, short="VOLUME_UP"),
+             create_btn_mapping(Buttons.VOLUME_DOWN, short="VOLUME_DOWN"),
+             create_btn_mapping(Buttons.MUTE, short="MUTE_TOGGLE"),
++            create_btn_mapping(Buttons.CHANNEL_UP, short="SUBWOOFER_UP"),
++            create_btn_mapping(Buttons.CHANNEL_DOWN, short="SUBWOOFER_DOWN"),
+         ]
+ 
+         super().__init__(
+@@ -77,7 +83,10 @@
+         cmds = [
+             "PLAY", "PAUSE", "STOP", "PLAY_PAUSE",
+             "NEXT", "PREVIOUS",
++            "PREVIOUS_FAVORITE", "NEXT_FAVORITE",
+             "VOLUME_UP", "VOLUME_DOWN", "MUTE_TOGGLE",
++            "SUBWOOFER_UP", "SUBWOOFER_DOWN",
++            "ON", "OFF",
+             "REPEAT_OFF", "REPEAT_ALL", "REPEAT_ONE",
+             "SHUFFLE_ON", "SHUFFLE_OFF",
+         ]
+@@ -91,19 +100,24 @@
+         return cmds
+ 
+     def _build_ui_pages(self, player_name: str, device: HeosDevice) -> list[UiPage]:
+-        pages = []
++        pages: list[UiPage] = []
+ 
+         page1 = UiPage("playback", f"{player_name} Controls", grid=Size(4, 6))
+-        page1.add(create_ui_text("Playback", 0, 0, Size(4, 1)))
+-        page1.add(create_ui_icon("uc:play", 0, 1, cmd="PLAY"))
+-        page1.add(create_ui_icon("uc:pause", 1, 1, cmd="PAUSE"))
+-        page1.add(create_ui_icon("uc:stop", 2, 1, cmd="STOP"))
+-        page1.add(create_ui_icon("uc:prev", 0, 2, cmd="PREVIOUS"))
+-        page1.add(create_ui_icon("uc:next", 1, 2, cmd="NEXT"))
++        page1.add(create_ui_text("Power / Playback", 0, 0, Size(4, 1)))
++        page1.add(create_ui_icon("uc:power", 0, 1, cmd="OFF" if self._is_avr else "STOP"))
++        page1.add(create_ui_icon("uc:play", 1, 1, cmd="PLAY"))
++        page1.add(create_ui_icon("uc:pause", 2, 1, cmd="PAUSE"))
++        page1.add(create_ui_icon("uc:prev", 0, 2, cmd="PREVIOUS_FAVORITE"))
++        page1.add(create_ui_icon("uc:next", 1, 2, cmd="NEXT_FAVORITE"))
++
+         page1.add(create_ui_text("Volume", 0, 3, Size(4, 1)))
+         page1.add(create_ui_icon("uc:up-arrow-bold", 0, 4, cmd="VOLUME_UP"))
+         page1.add(create_ui_icon("uc:down-arrow-bold", 1, 4, cmd="VOLUME_DOWN"))
+         page1.add(create_ui_icon("uc:mute", 2, 4, cmd="MUTE_TOGGLE"))
++        if self._is_avr:
++            page1.add(create_ui_text("Subwoofer", 0, 5, Size(2, 1)))
++            page1.add(create_ui_text("CH +", 2, 5, cmd="SUBWOOFER_UP"))
++            page1.add(create_ui_text("CH -", 3, 5, cmd="SUBWOOFER_DOWN"))
+         pages.append(page1)
+ 
+         page2 = UiPage("modes", f"{player_name} Modes", grid=Size(4, 6))
+@@ -133,6 +147,58 @@
+             pages.append(page3)
+         return pages
+ 
++    async def _send_denon(self, player: HeosPlayer, command: str) -> None:
++        """Send a single Denon AVR telnet command without using the Denon integration."""
++        if not self._is_avr:
++            raise HeosError("Denon command requested for non-AVR player")
++        writer = None
++        try:
++            _, writer = await asyncio.wait_for(
++                asyncio.open_connection(player.ip_address, DENON_TELNET_PORT),
++                timeout=DENON_COMMAND_TIMEOUT,
++            )
++            writer.write((command + "\r").encode("ascii"))
++            await asyncio.wait_for(writer.drain(), timeout=DENON_COMMAND_TIMEOUT)
++            await asyncio.sleep(0.02)
++        except Exception as err:
++            raise HeosError(f"Denon command {command} failed: {err}") from err
++        finally:
++            if writer is not None:
++                writer.close()
++                try:
++                    await writer.wait_closed()
++                except Exception:
++                    pass
++
++    async def _send_denon_volume(self, player: HeosPlayer, direction: str) -> None:
++        # Denon MVUP/MVDOWN is issued twice so one Remote button press equals 1 dB.
++        command = "MVUP" if direction == "up" else "MVDOWN"
++        await self._send_denon(player, command)
++        await self._send_denon(player, command)
++
++    async def _get_favorite_indices(self, refresh: bool = False) -> list[int]:
++        heos = self._device.heos
++        if not heos:
++            raise HeosError("HEOS not connected")
++        if refresh or not self._favorite_indices:
++            favorites = await heos.get_favorites()
++            self._favorite_indices = sorted(int(index) for index in favorites)
++        return self._favorite_indices
++
++    async def _change_favorite(self, player: HeosPlayer, direction: int) -> None:
++        indices = await self._get_favorite_indices()
++        if not indices:
++            raise HeosError("No HEOS favorites available")
++
++        if self._favorite_index not in indices:
++            # Start at the first/last item depending on direction.
++            self._favorite_index = indices[0] if direction > 0 else indices[-1]
++        else:
++            pos = indices.index(self._favorite_index)
++            self._favorite_index = indices[(pos + direction) % len(indices)]
++
++        await player.play_preset_station(self._favorite_index)
++
+     async def _handle_command(
+         self, entity: remote.RemoteEntity, cmd_id: str, params: dict[str, Any] | None
+     ) -> StatusCodes:
+@@ -149,54 +215,73 @@
+             self._last_cmd_time = time.monotonic()
+ 
+             try:
+-                match command:
+-                    case "PLAY":
+-                        await player.play()
+-                    case "PAUSE":
++                if command == "ON" and self._is_avr:
++                    await self._send_denon(player, "PWON")
++                elif command == "OFF" and self._is_avr:
++                    await self._send_denon(player, "PWSTANDBY")
++                elif command == "PLAY":
++                    await player.play()
++                elif command == "PAUSE":
++                    await player.pause()
++                elif command == "STOP":
++                    if self._is_avr:
++                        try:
++                            await player.set_volume(0)
++                            await asyncio.sleep(0.3)
++                        except Exception:
++                            pass
++                    await player.stop()
++                elif command == "PLAY_PAUSE":
++                    if player.state == PlayState.PLAY:
+                         await player.pause()
+-                    case "STOP":
+-                        if self._is_avr:
+-                            try:
+-                                await player.set_volume(0)
+-                                await asyncio.sleep(0.3)
+-                            except Exception:
+-                                pass
+-                        await player.stop()
+-                    case "PLAY_PAUSE":
+-                        if player.state == PlayState.PLAY:
+-                            await player.pause()
+-                        else:
+-                            await player.play()
+-                    case "NEXT":
++                    else:
++                        await player.play()
++                elif command in ("NEXT", "NEXT_FAVORITE"):
++                    if self._is_avr and command == "NEXT_FAVORITE":
++                        await self._change_favorite(player, +1)
++                    else:
+                         await player.play_next()
+-                    case "PREVIOUS":
++                elif command in ("PREVIOUS", "PREVIOUS_FAVORITE"):
++                    if self._is_avr and command == "PREVIOUS_FAVORITE":
++                        await self._change_favorite(player, -1)
++                    else:
+                         await player.play_previous()
+-                    case "VOLUME_UP":
++                elif command == "VOLUME_UP":
++                    if self._is_avr:
++                        await self._send_denon_volume(player, "up")
++                    else:
+                         await player.volume_up(5)
+-                    case "VOLUME_DOWN":
++                elif command == "VOLUME_DOWN":
++                    if self._is_avr:
++                        await self._send_denon_volume(player, "down")
++                    else:
+                         await player.volume_down(5)
+-                    case "MUTE_TOGGLE":
+-                        await player.toggle_mute()
+-                    case "REPEAT_OFF":
+-                        await player.set_play_mode(RepeatType.OFF, player.shuffle)
+-                    case "REPEAT_ALL":
+-                        await player.set_play_mode(RepeatType.ON_ALL, player.shuffle)
+-                    case "REPEAT_ONE":
+-                        await player.set_play_mode(RepeatType.ON_ONE, player.shuffle)
+-                    case "SHUFFLE_ON":
+-                        await player.set_play_mode(player.repeat, True)
+-                    case "SHUFFLE_OFF":
+-                        await player.set_play_mode(player.repeat, False)
+-                    case cmd if cmd in INPUT_COMMAND_MAP:
+-                        await player.play_input_source(INPUT_COMMAND_MAP[cmd])
+-                    case "GROUP_ALL_SPEAKERS":
+-                        await self._group_all(player)
+-                    case "LEAVE_GROUP":
+-                        await self._leave_group()
+-                    case cmd if cmd.startswith("GROUP_WITH_"):
+-                        await self._handle_group_with(cmd, player)
+-                    case _:
+-                        return StatusCodes.NOT_IMPLEMENTED
++                elif command == "SUBWOOFER_UP" and self._is_avr:
++                    await self._send_denon(player, "CVSW UP")
++                elif command == "SUBWOOFER_DOWN" and self._is_avr:
++                    await self._send_denon(player, "CVSW DOWN")
++                elif command == "MUTE_TOGGLE":
++                    await player.toggle_mute()
++                elif command == "REPEAT_OFF":
++                    await player.set_play_mode(RepeatType.OFF, player.shuffle)
++                elif command == "REPEAT_ALL":
++                    await player.set_play_mode(RepeatType.ON_ALL, player.shuffle)
++                elif command == "REPEAT_ONE":
++                    await player.set_play_mode(RepeatType.ON_ONE, player.shuffle)
++                elif command == "SHUFFLE_ON":
++                    await player.set_play_mode(player.repeat, True)
++                elif command == "SHUFFLE_OFF":
++                    await player.set_play_mode(player.repeat, False)
++                elif command in INPUT_COMMAND_MAP:
++                    await player.play_input_source(INPUT_COMMAND_MAP[command])
++                elif command == "GROUP_ALL_SPEAKERS":
++                    await self._group_all(player)
++                elif command == "LEAVE_GROUP":
++                    await self._leave_group()
++                elif command.startswith("GROUP_WITH_"):
++                    await self._handle_group_with(command, player)
++                else:
++                    return StatusCodes.NOT_IMPLEMENTED
+                 return StatusCodes.OK
+             except HeosError as err:
+                 _LOG.error("[%s] Remote command error %s: %s", entity.id, command, err)
