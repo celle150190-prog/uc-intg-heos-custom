@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 
 REMOTE = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("uc_intg_heos/remote.py")
-
 text = REMOTE.read_text(encoding="utf-8")
 
 pattern = re.compile(
@@ -47,7 +46,7 @@ replacement = '''    @staticmethod
 
         current_index: int | None = None
 
-        # First prefer the exact HEOS media_id of the currently playing station.
+        # Prefer the exact HEOS media_id of the currently playing station.
         if current_media_id:
             for index, favorite in entries:
                 favorite_media_id = str(getattr(favorite, "media_id", "") or "")
@@ -55,8 +54,7 @@ replacement = '''    @staticmethod
                     current_index = index
                     break
 
-        # HEOS devices can report a station name instead of the preset media_id.
-        # Use the favorite name as a reliable fallback.
+        # Some HEOS states expose the station name instead of the preset media_id.
         if current_index is None and (current_station or current_song):
             for index, favorite in entries:
                 favorite_name = self._normalize_favorite_text(
@@ -66,8 +64,8 @@ replacement = '''    @staticmethod
                     current_index = index
                     break
 
-        # Keep continuity when the previous command selected a favorite but the
-        # receiver has not reported the new now-playing metadata yet.
+        # Keep continuity immediately after selecting a favorite, before HEOS
+        # has reported the new now-playing metadata.
         if current_index is None and self._favorite_index in indices:
             current_index = self._favorite_index
 
@@ -95,12 +93,12 @@ if count != 1:
 
 REMOTE.write_text(new_text, encoding="utf-8", newline="\n")
 
-# Required invariants for the custom build.
 result = REMOTE.read_text(encoding="utf-8")
 for needle in (
     "_normalize_favorite_text",
-    "current_media.media_id",
-    "current_media, ",
+    "current_media_id",
+    "current_station",
+    "current_song",
     "play_preset_station",
 ):
     if needle not in result:
