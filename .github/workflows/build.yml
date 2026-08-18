@@ -72,13 +72,11 @@ jobs:
             --platform linux/arm64 \
             -v /tmp/heos-source:/workspace \
             -w /workspace \
-            -e DRIVER_PATH="${DRIVER_PATH}" \
             "${PYINSTALLER_IMAGE}" \
             bash -lc '
               set -euo pipefail
               python -m pip install --upgrade pip
               python -m pip install -r requirements.txt
-              echo "Building ${DRIVER_PATH}"
               pyinstaller --clean --onedir --name driver "${DRIVER_PATH}"
             '
 
