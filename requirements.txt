@@ -1,4 +1,0 @@
-ucapi
-ucapi-framework
-pyheos
-zeroconf
