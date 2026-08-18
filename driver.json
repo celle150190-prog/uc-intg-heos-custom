@@ -1,11 +1,18 @@
 {
-  "driver_id": "heos-media-custom",
-  "version": "2.1.2-custom.7",
+  "driver_id": "heos-media-standalone",
+  "version": "2.1.2-standalone.1",
   "min_core_api": "0.22.0",
-  "name": {"en": "HEOS Integration (Media UI Custom)"},
+  "name": {
+    "en": "HEOS Integration (Media UI Standalone)"
+  },
   "icon": "uc:music",
-  "description": {"en": "HEOS integration with Media UI favorite navigation, 1 dB AVR volume, Subwoofer 1 channel controls and HEOS AVR source selection."},
-  "developer": {"name": "Custom build", "url": "https://github.com/mase1981/uc-intg-heos"},
+  "description": {
+    "en": "Standalone HEOS integration with custom Media UI behavior for favorites, 1 dB AVR volume, Subwoofer 1 channel controls and HEOS AVR source selection."
+  },
+  "developer": {
+    "name": "Custom build",
+    "url": "https://github.com/mase1981/uc-intg-heos"
+  },
   "home_page": "https://github.com/mase1981/uc-intg-heos",
   "release_date": "2026-08-18"
 }
