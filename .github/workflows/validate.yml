@@ -1,0 +1,65 @@
+name: Validate HEOS 2.1.2 custom remote
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      UPSTREAM_REPO: https://github.com/mase1981/uc-intg-heos.git
+      UPSTREAM_TAG: v2.1.2
+
+    steps:
+      - name: Checkout custom project
+        uses: actions/checkout@v4
+
+      - name: Clone exact HEOS 2.1.2 source
+        run: |
+          git clone --depth 1 --branch "${UPSTREAM_TAG}" "${UPSTREAM_REPO}" /tmp/heos-source
+          test "$(git -C /tmp/heos-source describe --tags --exact-match)" = "${UPSTREAM_TAG}"
+          test -f /tmp/heos-source/uc_intg_heos/driver.py
+          test -f /tmp/heos-source/driver.json
+          test -f /tmp/heos-source/uc_intg_heos/remote.py
+
+      - name: Validate metadata
+        run: |
+          python3 -m json.tool driver.json >/dev/null
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('driver.json').read_text())
+          assert data['driver_id'] == 'heos-denon-ui'
+          assert data['version'] == '2.1.2-custom.3'
+          assert data['min_core_api'] == '0.22.0'
+          PY
+
+      - name: Validate custom remote syntax
+        run: python3 -m py_compile uc_intg_heos/remote.py
+
+      - name: Verify custom remote against HEOS 2.1.2 source layout
+        run: |
+          cp uc_intg_heos/remote.py /tmp/heos-source/uc_intg_heos/remote.py
+          python3 -m py_compile /tmp/heos-source/uc_intg_heos/remote.py
+          grep -q 'PWON' /tmp/heos-source/uc_intg_heos/remote.py
+          grep -q 'PWSTANDBY' /tmp/heos-source/uc_intg_heos/remote.py
+          grep -q 'MVUP' /tmp/heos-source/uc_intg_heos/remote.py
+          grep -q 'MVDOWN' /tmp/heos-source/uc_intg_heos/remote.py
+          grep -q 'CVSW UP' /tmp/heos-source/uc_intg_heos/remote.py
+          grep -q 'CVSW DOWN' /tmp/heos-source/uc_intg_heos/remote.py
+          grep -q 'NEXT_FAVORITE' /tmp/heos-source/uc_intg_heos/remote.py
+          grep -q 'PREVIOUS_FAVORITE' /tmp/heos-source/uc_intg_heos/remote.py
+          grep -q 'play_preset_station' /tmp/heos-source/uc_intg_heos/remote.py
+
+      - name: Check required files
+        run: |
+          test -f driver.json
+          test -f uc_intg_heos/remote.py
+          test -f .github/workflows/build.yml
+          test -f .github/workflows/validate.yml
