@@ -36,7 +36,7 @@ jobs:
           from pathlib import Path
           data = json.loads(Path('driver.json').read_text())
           assert data['driver_id'] == 'heos-denon-ui'
-          assert data['version'] == '2.1.2-custom.3'
+          assert data['version'] == '2.1.2-custom.4'
           assert data['min_core_api'] == '0.22.0'
           PY
 
@@ -46,6 +46,7 @@ jobs:
       - name: Verify custom remote against HEOS 2.1.2 source layout
         run: |
           cp uc_intg_heos/remote.py /tmp/heos-source/uc_intg_heos/remote.py
+          python3 scripts/apply_favorite_navigation_fix.py /tmp/heos-source/uc_intg_heos/remote.py
           python3 -m py_compile /tmp/heos-source/uc_intg_heos/remote.py
           grep -q 'PWON' /tmp/heos-source/uc_intg_heos/remote.py
           grep -q 'PWSTANDBY' /tmp/heos-source/uc_intg_heos/remote.py
@@ -55,11 +56,15 @@ jobs:
           grep -q 'CVSW DOWN' /tmp/heos-source/uc_intg_heos/remote.py
           grep -q 'NEXT_FAVORITE' /tmp/heos-source/uc_intg_heos/remote.py
           grep -q 'PREVIOUS_FAVORITE' /tmp/heos-source/uc_intg_heos/remote.py
+          grep -q 'current_media_id' /tmp/heos-source/uc_intg_heos/remote.py
+          grep -q 'current_station' /tmp/heos-source/uc_intg_heos/remote.py
+          grep -q 'current_song' /tmp/heos-source/uc_intg_heos/remote.py
           grep -q 'play_preset_station' /tmp/heos-source/uc_intg_heos/remote.py
 
       - name: Check required files
         run: |
           test -f driver.json
           test -f uc_intg_heos/remote.py
+          test -f scripts/apply_favorite_navigation_fix.py
           test -f .github/workflows/build.yml
           test -f .github/workflows/validate.yml
