@@ -135,7 +135,7 @@ diff --git a/uc_intg_heos/remote.py b/uc_intg_heos/remote.py
 +        await player.play_preset_station(self._favorite_index)
 +
      async def _handle_command(
-         self, entity: remote.RemoteEntity, cmd_id: str, params: dict[str, Any] | None
+         self, entity: remote.Remote, cmd_id: str, params: dict[str, Any] | None
      ) -> StatusCodes:
 @@ -149,54 +215,73 @@
              self._last_cmd_time = time.monotonic()
