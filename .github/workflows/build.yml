@@ -13,11 +13,15 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: heos-custom-release
+  cancel-in-progress: false
+
 env:
   UPSTREAM_REPO: https://github.com/mase1981/uc-intg-heos.git
+  CUSTOM_REPO: https://github.com/celle150190-prog/uc-intg-heos-custom
   PYINSTALLER_IMAGE: docker.io/unfoldedcircle/r2-pyinstaller:3.11.12-0.3.0
   PYINSTALLER_NAME: intg-heos-denon-ui
-  CUSTOM_REPO: https://github.com/celle150190-prog/uc-intg-heos-custom
 
 jobs:
   build:
@@ -27,8 +31,10 @@ jobs:
     steps:
       - name: Checkout custom project
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-      - name: Determine HEOS upstream version and custom release number
+      - name: Determine HEOS upstream version and next custom release number
         id: version
         shell: bash
         env:
@@ -56,19 +62,6 @@ jobs:
             exit 1
           fi
 
-          echo "Upstream: $upstream_tag"
-          echo "Current custom version: $current_version"
-
-          echo "upstream_tag=$upstream_tag" >> "$GITHUB_OUTPUT"
-          echo "upstream_version=$upstream_version" >> "$GITHUB_OUTPUT"
-          echo "current_version=$current_version" >> "$GITHUB_OUTPUT"
-
-          if [ "$upstream_version" = "$current_base" ] && [ -z "$requested" ]; then
-            echo "build_needed=false" >> "$GITHUB_OUTPUT"
-            echo "No new HEOS release found. Nothing to build."
-            exit 0
-          fi
-
           max_suffix=0
           while IFS= read -r tag; do
             suffix="${tag#v${upstream_version}.}"
@@ -79,14 +72,24 @@ jobs:
             fi
           done < <(gh release list --limit 1000 --json tagName --jq '.[].tagName' || true)
 
+          if [ "$upstream_version" = "$current_base" ] && [ -z "$requested" ]; then
+            echo "build_needed=false" >> "$GITHUB_OUTPUT"
+            echo "No new HEOS release found. Nothing to build."
+            exit 0
+          fi
+
           custom_suffix=$((max_suffix + 1))
           custom_version="${upstream_version}.${custom_suffix}"
           release_tag="v${custom_version}"
 
-          echo "custom_suffix=$custom_suffix" >> "$GITHUB_OUTPUT"
+          echo "upstream_tag=$upstream_tag" >> "$GITHUB_OUTPUT"
+          echo "upstream_version=$upstream_version" >> "$GITHUB_OUTPUT"
           echo "custom_version=$custom_version" >> "$GITHUB_OUTPUT"
+          echo "custom_suffix=$custom_suffix" >> "$GITHUB_OUTPUT"
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
           echo "build_needed=true" >> "$GITHUB_OUTPUT"
+          echo "Upstream: $upstream_tag"
+          echo "Current manifest version: $current_version"
           echo "Publishing custom version: $custom_version"
 
       - name: Setup QEMU for ARM64
@@ -144,13 +147,13 @@ jobs:
           data['driver_id'] = 'heos-denon-ui'
           data['version'] = os.environ['CUSTOM_VERSION']
           data.setdefault('name', {})['en'] = 'HEOS Remote 3 Custom'
-          data['home_page'] = os.environ['CUSTOM_REPO']
+          data['home_page'] = 'https://github.com/celle150190-prog/uc-intg-heos-custom'
           data['custom'] = True
           developer = data.get('developer')
           if not isinstance(developer, dict):
               developer = {}
           developer['name'] = developer.get('name') or 'Marci / Custom Project'
-          developer['url'] = os.environ['CUSTOM_REPO']
+          developer['url'] = 'https://github.com/celle150190-prog/uc-intg-heos-custom'
           data['developer'] = developer
           data.setdefault('description', {})['en'] = 'HEOS integration with a custom Remote 3 remote UI for Denon AVR control.'
           Path('/tmp/heos-source/driver.json').write_text(json.dumps(data, indent=2) + '\n')
@@ -240,23 +243,61 @@ jobs:
           grep -q '^./driver.json$' /tmp/archive-contents.txt
           grep -q '^./bin/driver$' /tmp/archive-contents.txt
           echo "ARTIFACT_NAME=$artifact" >> "$GITHUB_ENV"
-          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
           ls -lh "$artifact"
 
-      - name: Upload Remote 3 archive
+      - name: Verify release manifest exactly matches version
         if: steps.version.outputs.build_needed == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: uc-intg-heos-denon-ui-${{ steps.version.outputs.upstream_version }}-aarch64
-          path: ${{ env.ARTIFACT_NAME }}
-          if-no-files-found: error
-          retention-days: 14
+        env:
+          CUSTOM_VERSION: ${{ steps.version.outputs.custom_version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          data = json.loads(Path('/tmp/artifacts/driver.json').read_text())
+          assert data['version'] == os.environ['CUSTOM_VERSION']
+          assert data['custom'] is True
+          assert data['developer']['url'] == 'https://github.com/celle150190-prog/uc-intg-heos-custom'
+          assert data['home_page'] == 'https://github.com/celle150190-prog/uc-intg-heos-custom'
+          PY
+
+      - name: Publish exact release manifest to main
+        if: steps.version.outputs.build_needed == 'true'
+        env:
+          CUSTOM_VERSION: ${{ steps.version.outputs.custom_version }}
+        run: |
+          set -euo pipefail
+          cp /tmp/artifacts/driver.json driver.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add driver.json
+          if git diff --cached --quiet; then
+            echo 'driver.json already matches release metadata'
+          else
+            git commit -m "Set release manifest to ${CUSTOM_VERSION}"
+            git push origin HEAD:main
+          fi
+          echo "RELEASE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Publish GitHub release
         if: steps.version.outputs.build_needed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
         run: |
+          set -euo pipefail
+          test -n "$RELEASE_COMMIT"
           gh release create "$RELEASE_TAG" "$ARTIFACT_NAME" \
+            --target "$RELEASE_COMMIT" \
             --title "HEOS Remote 3 Custom ${{ steps.version.outputs.custom_version }}" \
             --generate-notes
+
+      - name: Upload Remote 3 archive
+        if: steps.version.outputs.build_needed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: uc-intg-heos-denon-ui-${{ steps.version.outputs.custom_version }}-aarch64
+          path: ${{ env.ARTIFACT_NAME }}
+          if-no-files-found: error
+          retention-days: 14
