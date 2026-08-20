@@ -63,9 +63,6 @@ jobs:
             exit 0
           fi
 
-          # Find all already-published custom releases for this exact upstream
-          # version and select the next free suffix. This prevents a repeated
-          # build of the same upstream version from publishing a lower version.
           max_suffix=0
           while IFS= read -r tag; do
             suffix="${tag#v${upstream_version}-custom.}"
@@ -221,8 +218,9 @@ jobs:
           test -x /tmp/artifacts/bin/driver
           tar czf "$artifact" -C /tmp/artifacts .
           test -f "$artifact"
-          tar -tzf "$artifact" | grep -q '^./driver.json$'
-          tar -tzf "$artifact" | grep -q '^./bin/driver$'
+          tar -tzf "$artifact" > /tmp/archive-contents.txt
+          grep -q '^./driver.json$' /tmp/archive-contents.txt
+          grep -q '^./bin/driver$' /tmp/archive-contents.txt
           echo "ARTIFACT_NAME=$artifact" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
           ls -lh "$artifact"
