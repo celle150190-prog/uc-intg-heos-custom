@@ -138,6 +138,8 @@ jobs:
           data['driver_id'] = 'heos-denon-ui'
           data['version'] = os.environ['CUSTOM_VERSION']
           data.setdefault('name', {})['en'] = 'HEOS Remote 3 Custom'
+          data['home_page'] = 'https://github.com/celle150190-prog/uc-intg-heos-custom'
+          data.setdefault('description', {})['en'] = 'HEOS integration with a custom Remote 3 remote UI for Denon AVR control.'
           Path('/tmp/heos-source/driver.json').write_text(json.dumps(data, indent=2) + '\n')
           PY
 
@@ -156,6 +158,7 @@ jobs:
           assert data['driver_id'] == 'heos-denon-ui'
           assert data['version'] == os.environ['CUSTOM_VERSION']
           assert data['name']['en'] == 'HEOS Remote 3 Custom'
+          assert data['home_page'] == 'https://github.com/celle150190-prog/uc-intg-heos-custom'
           PY
           grep -q 'PWON' /tmp/heos-source/uc_intg_heos/remote.py
           grep -q 'PWSTANDBY' /tmp/heos-source/uc_intg_heos/remote.py
