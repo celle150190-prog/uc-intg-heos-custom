@@ -7,11 +7,12 @@
   },
   "icon": "uc:music",
   "description": {
-    "en": "HEOS 2.1.2 integration with a custom Remote 3 remote UI for Denon AVR control."
+    "en": "HEOS integration with a custom Remote 3 remote UI for Denon AVR control."
   },
   "developer": {
     "name": "Marci / Custom Project"
   },
+  "home_page": "https://github.com/celle150190-prog/uc-intg-heos-custom",
   "setup_data_schema": {
     "title": {
       "en": "HEOS Integration Setup"
@@ -32,5 +33,5 @@
       }
     ]
   },
-  "release_date": "2026-08-18"
+  "release_date": "2026-08-20"
 }
