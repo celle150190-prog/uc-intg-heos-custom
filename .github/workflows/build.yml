@@ -125,6 +125,7 @@ jobs:
           from pathlib import Path
           data = json.loads(Path('/tmp/heos-source/driver.json').read_text())
           assert data['version'] == os.environ['UPSTREAM_VERSION']
+          assert data['driver_id'] == 'uc-intg-heos'
           PY
 
       - name: Install custom remote
@@ -144,9 +145,9 @@ jobs:
           import os
           from pathlib import Path
           data = json.loads(Path('driver.json').read_text())
-          data['driver_id'] = 'heos-denon-ui'
+          data['driver_id'] = 'uc-intg-heos'
           data['version'] = os.environ['CUSTOM_VERSION']
-          data.setdefault('name', {})['en'] = 'HEOS Remote 3 Custom'
+          data.setdefault('name', {})['en'] = 'Denon HEOS'
           data['home_page'] = 'https://github.com/celle150190-prog/uc-intg-heos-custom'
           data['custom'] = True
           developer = data.get('developer')
@@ -155,7 +156,7 @@ jobs:
           developer['name'] = developer.get('name') or 'Marci / Custom Project'
           developer['url'] = 'https://github.com/celle150190-prog/uc-intg-heos-custom'
           data['developer'] = developer
-          data.setdefault('description', {})['en'] = 'HEOS integration with a custom Remote 3 remote UI for Denon AVR control.'
+          data.setdefault('description', {})['en'] = 'HEOS integration with custom Remote 3 controls for Denon AVR.'
           Path('/tmp/heos-source/driver.json').write_text(json.dumps(data, indent=2) + '\n')
           PY
 
@@ -171,10 +172,10 @@ jobs:
           import os
           from pathlib import Path
           data = json.loads(Path('/tmp/heos-source/driver.json').read_text())
-          assert data['driver_id'] == 'heos-denon-ui'
+          assert data['driver_id'] == 'uc-intg-heos'
           assert data['version'] == os.environ['CUSTOM_VERSION']
           assert data['custom'] is True
-          assert data['name']['en'] == 'HEOS Remote 3 Custom'
+          assert data['name']['en'] == 'Denon HEOS'
           assert data['home_page'] == 'https://github.com/celle150190-prog/uc-intg-heos-custom'
           assert data['developer']['url'] == 'https://github.com/celle150190-prog/uc-intg-heos-custom'
           PY
@@ -256,6 +257,7 @@ jobs:
           import os
           from pathlib import Path
           data = json.loads(Path('/tmp/artifacts/driver.json').read_text())
+          assert data['driver_id'] == 'uc-intg-heos'
           assert data['version'] == os.environ['CUSTOM_VERSION']
           assert data['custom'] is True
           assert data['developer']['url'] == 'https://github.com/celle150190-prog/uc-intg-heos-custom'
@@ -290,7 +292,7 @@ jobs:
           test -n "$RELEASE_COMMIT"
           gh release create "$RELEASE_TAG" "$ARTIFACT_NAME" \
             --target "$RELEASE_COMMIT" \
-            --title "HEOS Remote 3 Custom ${{ steps.version.outputs.custom_version }}" \
+            --title "Denon HEOS Custom ${{ steps.version.outputs.custom_version }}" \
             --generate-notes
 
       - name: Upload Remote 3 archive
