@@ -13,14 +13,16 @@ on:
 permissions:
   contents: write
 
+env:
+  UPSTREAM_REPO: https://github.com/mase1981/uc-intg-heos.git
+  PYINSTALLER_IMAGE: docker.io/unfoldedcircle/r2-pyinstaller:3.11.12-0.3.0
+  PYINSTALLER_NAME: intg-heos-denon-ui
+  CUSTOM_REPO: https://github.com/celle150190-prog/uc-intg-heos-custom
+
 jobs:
   build:
     name: Build ARM64 Remote 3 archive
     runs-on: ubuntu-24.04
-    env:
-      UPSTREAM_REPO: https://github.com/mase1981/uc-intg-heos.git
-      PYINSTALLER_IMAGE: docker.io/unfoldedcircle/r2-pyinstaller:3.11.12-0.3.0
-      PYINSTALLER_NAME: intg-heos-denon-ui
 
     steps:
       - name: Checkout custom project
@@ -142,7 +144,14 @@ jobs:
           data['driver_id'] = 'heos-denon-ui'
           data['version'] = os.environ['CUSTOM_VERSION']
           data.setdefault('name', {})['en'] = 'HEOS Remote 3 Custom'
-          data['home_page'] = 'https://github.com/celle150190-prog/uc-intg-heos-custom'
+          data['home_page'] = os.environ['CUSTOM_REPO']
+          data['custom'] = True
+          developer = data.get('developer')
+          if not isinstance(developer, dict):
+              developer = {}
+          developer['name'] = developer.get('name') or 'Marci / Custom Project'
+          developer['url'] = os.environ['CUSTOM_REPO']
+          data['developer'] = developer
           data.setdefault('description', {})['en'] = 'HEOS integration with a custom Remote 3 remote UI for Denon AVR control.'
           Path('/tmp/heos-source/driver.json').write_text(json.dumps(data, indent=2) + '\n')
           PY
@@ -161,8 +170,10 @@ jobs:
           data = json.loads(Path('/tmp/heos-source/driver.json').read_text())
           assert data['driver_id'] == 'heos-denon-ui'
           assert data['version'] == os.environ['CUSTOM_VERSION']
+          assert data['custom'] is True
           assert data['name']['en'] == 'HEOS Remote 3 Custom'
           assert data['home_page'] == 'https://github.com/celle150190-prog/uc-intg-heos-custom'
+          assert data['developer']['url'] == 'https://github.com/celle150190-prog/uc-intg-heos-custom'
           PY
           grep -q 'PWON' /tmp/heos-source/uc_intg_heos/remote.py
           grep -q 'PWSTANDBY' /tmp/heos-source/uc_intg_heos/remote.py
