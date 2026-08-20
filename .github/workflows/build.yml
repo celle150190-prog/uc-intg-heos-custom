@@ -26,9 +26,11 @@ jobs:
       - name: Checkout custom project
         uses: actions/checkout@v6
 
-      - name: Determine HEOS upstream version
+      - name: Determine HEOS upstream version and custom release number
         id: version
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           requested='${{ inputs.upstream_tag }}'
@@ -58,9 +60,31 @@ jobs:
           if [ "$upstream_version" = "$current_base" ] && [ -z "$requested" ]; then
             echo "build_needed=false" >> "$GITHUB_OUTPUT"
             echo "No new HEOS release found. Nothing to build."
-          else
-            echo "build_needed=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          # Find all already-published custom releases for this exact upstream
+          # version and select the next free suffix. This prevents a repeated
+          # build of the same upstream version from publishing a lower version.
+          max_suffix=0
+          while IFS= read -r tag; do
+            suffix="${tag#v${upstream_version}-custom.}"
+            if [[ "$tag" == "v${upstream_version}-custom."+([0-9]) ]] && [[ "$suffix" =~ ^[0-9]+$ ]]; then
+              if (( suffix > max_suffix )); then
+                max_suffix=$suffix
+              fi
+            fi
+          done < <(gh release list --limit 1000 --json tagName --jq '.[].tagName' || true)
+
+          custom_suffix=$((max_suffix + 1))
+          custom_version="${upstream_version}-custom.${custom_suffix}"
+          release_tag="v${custom_version}"
+
+          echo "custom_suffix=$custom_suffix" >> "$GITHUB_OUTPUT"
+          echo "custom_version=$custom_version" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "build_needed=true" >> "$GITHUB_OUTPUT"
+          echo "Publishing custom version: $custom_version"
 
       - name: Setup QEMU for ARM64
         if: steps.version.outputs.build_needed == 'true'
@@ -80,6 +104,8 @@ jobs:
 
       - name: Verify upstream source layout
         if: steps.version.outputs.build_needed == 'true'
+        env:
+          UPSTREAM_VERSION: ${{ steps.version.outputs.upstream_version }}
         run: |
           set -euo pipefail
           test -f /tmp/heos-source/uc_intg_heos/__init__.py
@@ -89,9 +115,10 @@ jobs:
           test -f /tmp/heos-source/uc_intg_heos/remote.py
           python3 - <<'PY'
           import json
+          import os
           from pathlib import Path
           data = json.loads(Path('/tmp/heos-source/driver.json').read_text())
-          assert data['version'] == '${{ steps.version.outputs.upstream_version }}'
+          assert data['version'] == os.environ['UPSTREAM_VERSION']
           PY
 
       - name: Install custom remote
@@ -103,23 +130,24 @@ jobs:
       - name: Generate custom metadata
         if: steps.version.outputs.build_needed == 'true'
         env:
-          UPSTREAM_VERSION: ${{ steps.version.outputs.upstream_version }}
+          CUSTOM_VERSION: ${{ steps.version.outputs.custom_version }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json
           import os
           from pathlib import Path
-          version = os.environ['UPSTREAM_VERSION']
           data = json.loads(Path('driver.json').read_text())
           data['driver_id'] = 'heos-denon-ui'
-          data['version'] = f'{version}-custom.1'
+          data['version'] = os.environ['CUSTOM_VERSION']
           data.setdefault('name', {})['en'] = 'HEOS Remote 3 Custom'
           Path('/tmp/heos-source/driver.json').write_text(json.dumps(data, indent=2) + '\n')
           PY
 
       - name: Validate custom source
         if: steps.version.outputs.build_needed == 'true'
+        env:
+          CUSTOM_VERSION: ${{ steps.version.outputs.custom_version }}
         run: |
           set -euo pipefail
           python3 -m py_compile /tmp/heos-source/uc_intg_heos/remote.py
@@ -129,7 +157,7 @@ jobs:
           from pathlib import Path
           data = json.loads(Path('/tmp/heos-source/driver.json').read_text())
           assert data['driver_id'] == 'heos-denon-ui'
-          assert data['version'] == f"{os.environ['UPSTREAM_VERSION']}-custom.1"
+          assert data['version'] == os.environ['CUSTOM_VERSION']
           assert data['name']['en'] == 'HEOS Remote 3 Custom'
           PY
           grep -q 'PWON' /tmp/heos-source/uc_intg_heos/remote.py
@@ -179,10 +207,10 @@ jobs:
         if: steps.version.outputs.build_needed == 'true'
         env:
           UPSTREAM_VERSION: ${{ steps.version.outputs.upstream_version }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
         run: |
           set -euo pipefail
           artifact="uc-intg-heos-denon-ui-${UPSTREAM_VERSION}-aarch64.tar.gz"
-          release_tag="v${UPSTREAM_VERSION}-custom.1"
           rm -rf /tmp/artifacts
           mkdir -p /tmp/artifacts/bin
           cp -a "/tmp/heos-source/dist/${PYINSTALLER_NAME}/." /tmp/artifacts/bin/
@@ -196,7 +224,7 @@ jobs:
           tar -tzf "$artifact" | grep -q '^./driver.json$'
           tar -tzf "$artifact" | grep -q '^./bin/driver$'
           echo "ARTIFACT_NAME=$artifact" >> "$GITHUB_ENV"
-          echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
           ls -lh "$artifact"
 
       - name: Upload Remote 3 archive
@@ -214,5 +242,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$RELEASE_TAG" "$ARTIFACT_NAME" \
-            --title "HEOS Remote 3 Custom ${{ steps.version.outputs.upstream_version }}" \
+            --title "HEOS Remote 3 Custom ${{ steps.version.outputs.custom_version }}" \
             --generate-notes
