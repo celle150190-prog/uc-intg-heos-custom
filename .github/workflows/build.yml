@@ -48,7 +48,11 @@ jobs:
           print(json.loads(Path('driver.json').read_text())['version'])
           PY
           )"
-          current_base="${current_version%%-custom.*}"
+          current_base="$(printf '%s' "$current_version" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
+          if [[ ! "$current_base" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: Unable to determine upstream version from driver.json version '$current_version'"
+            exit 1
+          fi
 
           echo "Upstream: $upstream_tag"
           echo "Current custom version: $current_version"
@@ -65,8 +69,8 @@ jobs:
 
           max_suffix=0
           while IFS= read -r tag; do
-            suffix="${tag#v${upstream_version}-custom.}"
-            if [[ "$tag" == "v${upstream_version}-custom."+([0-9]) ]] && [[ "$suffix" =~ ^[0-9]+$ ]]; then
+            suffix="${tag#v${upstream_version}.}"
+            if [[ "$tag" =~ ^v${upstream_version}\.[0-9]+$ ]] && [[ "$suffix" =~ ^[0-9]+$ ]]; then
               if (( suffix > max_suffix )); then
                 max_suffix=$suffix
               fi
@@ -74,7 +78,7 @@ jobs:
           done < <(gh release list --limit 1000 --json tagName --jq '.[].tagName' || true)
 
           custom_suffix=$((max_suffix + 1))
-          custom_version="${upstream_version}-custom.${custom_suffix}"
+          custom_version="${upstream_version}.${custom_suffix}"
           release_tag="v${custom_version}"
 
           echo "custom_suffix=$custom_suffix" >> "$GITHUB_OUTPUT"
