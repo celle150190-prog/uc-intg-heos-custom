@@ -1,13 +1,13 @@
 {
-  "driver_id": "heos-denon-ui",
+  "driver_id": "uc-intg-heos",
   "version": "2.1.2.5",
   "min_core_api": "0.22.0",
   "name": {
-    "en": "HEOS Remote 3 Custom"
+    "en": "Denon HEOS"
   },
   "icon": "uc:music",
   "description": {
-    "en": "HEOS integration with a custom Remote 3 remote UI for Denon AVR control."
+    "en": "HEOS integration with custom Remote 3 controls for Denon AVR."
   },
   "developer": {
     "name": "Marci / Custom Project",
@@ -22,18 +22,20 @@
       {
         "id": "info",
         "label": {
-          "en": "Account-Based Setup"
+          "en": "Account-Based Setup",
+          "de": "Konto-basierte Einrichtung"
         },
         "field": {
           "label": {
             "value": {
-              "en": "Use the same HEOS device/account setup as the HEOS 2.1.2 integration."
+              "en": "Use the same HEOS device/account setup as the original HEOS integration.",
+              "de": "Verwende dieselbe HEOS-Geräte-/Kontoeinrichtung wie bei der originalen HEOS-Integration."
             }
           }
         }
       }
     ]
   },
-  "release_date": "2026-08-20",
+  "release_date": "2026-08-21",
   "custom": true
 }
