@@ -96,9 +96,7 @@ class HeosRemote(RemoteEntity):
             "SHUFFLE_ON", "SHUFFLE_OFF",
         ]
         if self._is_avr:
-            cmds.extend(
-                ["SUBWOOFER_1_LEVEL_UP", "SUBWOOFER_1_LEVEL_DOWN"]
-            )
+            cmds.extend(["SUBWOOFER_1_LEVEL_UP", "SUBWOOFER_1_LEVEL_DOWN"])
         cmds.extend(INPUT_COMMAND_MAP.keys())
 
         if len(device.players) > 1:
@@ -124,18 +122,8 @@ class HeosRemote(RemoteEntity):
             page1.add(create_ui_text("Master Volume (1 dB)", 0, 3, Size(4, 1)))
             page1.add(create_ui_text("+1 dB", 0, 4, Size(2, 1), cmd="VOLUME_UP"))
             page1.add(create_ui_text("-1 dB", 2, 4, Size(2, 1), cmd="VOLUME_DOWN"))
-            page1.add(
-                create_ui_text(
-                    "Subwoofer 1 +", 0, 5, Size(2, 1),
-                    cmd="SUBWOOFER_1_LEVEL_UP",
-                )
-            )
-            page1.add(
-                create_ui_text(
-                    "Subwoofer 1 -", 2, 5, Size(2, 1),
-                    cmd="SUBWOOFER_1_LEVEL_DOWN",
-                )
-            )
+            page1.add(create_ui_text("Subwoofer 1 +", 0, 5, Size(2, 1), cmd="SUBWOOFER_1_LEVEL_UP"))
+            page1.add(create_ui_text("Subwoofer 1 -", 2, 5, Size(2, 1), cmd="SUBWOOFER_1_LEVEL_DOWN"))
         else:
             page1.add(create_ui_text("Volume", 0, 3, Size(4, 1)))
             page1.add(create_ui_icon("uc:up-arrow-bold", 0, 4, cmd="VOLUME_UP"))

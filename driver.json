@@ -3,11 +3,11 @@
   "version": "2.1.2-custom.1",
   "min_core_api": "0.22.0",
   "name": {
-      "en": "HEOS Integration (Custom Denon AVR)"
+    "en": "HEOS Integration (Custom Denon AVR)"
   },
   "icon": "uc:music",
   "description": {
-      "en": "HEOS integration with custom Denon AVR controls: 1 dB master-volume steps and Subwoofer 1 controls on Remote 3."
+    "en": "HEOS integration with custom Denon AVR controls: 1 dB master-volume steps and Subwoofer 1 controls on Remote 3."
   },
   "developer": {
     "name": "Meir Miyara",

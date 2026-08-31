@@ -93,12 +93,7 @@ class HeosDevice(PollingDevice):
         return any(kw in model_lower for kw in AVR_KEYWORDS)
 
     async def send_avr_command(self, command: str) -> None:
-        """Send a Denon/Marantz IP-control command to the AVR Telnet port.
-
-        HEOS does not expose the AVR's Subwoofer 1 Level Adjust control.  Denon
-        and Marantz AVRs expose it through their documented TCP/IP control
-        protocol on port 23, using a carriage-return terminated command.
-        """
+        """Send a Denon/Marantz IP-control command to the AVR Telnet port."""
         writer: asyncio.StreamWriter | None = None
         try:
             _, writer = await asyncio.wait_for(
