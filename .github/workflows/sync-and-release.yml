@@ -39,7 +39,7 @@ jobs:
           set -euo pipefail
           upstream_tag="$(gh api repos/mase1981/uc-intg-heos/releases/latest --jq .tag_name)"
           source_version="${upstream_tag#v}"
-          custom_version="${source_version}-custom.2"
+          custom_version="${source_version}-custom.3"
           current_tag="$(tr -d '\r\n' < UPSTREAM_VERSION)"
           should_build=false
           if [[ "${upstream_tag}" != "${current_tag}" || "${FORCE_REBUILD}" == "true" || "${GITHUB_EVENT_NAME}" == "push" ]]; then
@@ -130,6 +130,7 @@ jobs:
             - Remote 3 physical **Channel Up/Down** now adjust **Subwoofer 1 Level**.
             - Added **Subwoofer 1 +** and **Subwoofer 1 −** controls to the AVR remote UI.
             - Remote 3 physical **Power** button directly toggles AVR power through the supported Remote command interface.
+            - The Media UI now directly handles Power and Channel Up/Down for AVR control, while preserving cover art and metadata.
             - Upstream source: ${{ steps.metadata.outputs.upstream_tag }}.
 
             ## Requirement
@@ -137,4 +138,3 @@ jobs:
             Enable **Network Control → Always On** on the AVR and allow TCP port 23 from the Remote.
           allowUpdates: true
           replacesArtifacts: true
-

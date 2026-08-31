@@ -191,6 +191,53 @@ def patch_remote(path: Path) -> None:
 def patch_media_player(path: Path) -> None:
     replace_once(
         path,
+        "        entity_id = f\"media_player.{device_config.identifier}.{player.player_id}\"\n\n"
+        "        super().__init__(\n"
+        "            entity_id,\n"
+        "            player.name,\n"
+        "            FEATURES,\n",
+        "        entity_id = f\"media_player.{device_config.identifier}.{player.player_id}\"\n\n"
+        "        features = FEATURES.copy()\n"
+        "        if self._is_avr:\n"
+        "            features.extend([Features.TOGGLE, Features.CHANNEL_SWITCHER])\n\n"
+        "        super().__init__(\n"
+        "            entity_id,\n"
+        "            player.name,\n"
+        "            features,\n",
+    )
+    replace_once(
+        path,
+        "                case Commands.ON:\n"
+        "                    await player.play()\n\n"
+        "                case Commands.OFF:\n"
+        "                    if self._is_avr:\n"
+        "                        try:\n"
+        "                            await player.set_volume(0)\n"
+        "                            await asyncio.sleep(0.3)\n"
+        "                            await player.stop()\n"
+        "                        except Exception:\n"
+        "                            await player.stop()\n"
+        "                    else:\n"
+        "                        await player.stop()\n\n"
+        "                case Commands.PLAY_PAUSE:\n",
+        "                case Commands.ON:\n"
+        "                    if self._is_avr:\n"
+        "                        await self._device.send_avr_command(\"PWON\")\n"
+        "                    else:\n"
+        "                        await player.play()\n\n"
+        "                case Commands.OFF:\n"
+        "                    if self._is_avr:\n"
+        "                        await self._device.send_avr_command(\"PWSTANDBY\")\n"
+        "                    else:\n"
+        "                        await player.stop()\n\n"
+        "                case Commands.TOGGLE:\n"
+        "                    if not self._is_avr:\n"
+        "                        return StatusCodes.NOT_IMPLEMENTED\n"
+        "                    await self._device.toggle_avr_power()\n\n"
+        "                case Commands.PLAY_PAUSE:\n",
+    )
+    replace_once(
+        path,
         "                case Commands.VOLUME_UP:\n"
         "                    await player.volume_up(params.get(\"step\", 5))\n\n"
         "                case Commands.VOLUME_DOWN:\n"
@@ -198,14 +245,24 @@ def patch_media_player(path: Path) -> None:
         "                case Commands.VOLUME_UP:\n"
         "                    await player.volume_up(1 if self._is_avr else params.get(\"step\", 5))\n\n"
         "                case Commands.VOLUME_DOWN:\n"
-        "                    await player.volume_down(1 if self._is_avr else params.get(\"step\", 5))\n",
+        "                    await player.volume_down(1 if self._is_avr else params.get(\"step\", 5))\n\n"
+        "                case Commands.CHANNEL_UP:\n"
+        "                    if not self._is_avr:\n"
+        "                        return StatusCodes.NOT_IMPLEMENTED\n"
+        "                    await self._device.send_avr_command(\"PSSWL ON\")\n"
+        "                    await self._device.send_avr_command(\"PSSWL UP\")\n\n"
+        "                case Commands.CHANNEL_DOWN:\n"
+        "                    if not self._is_avr:\n"
+        "                        return StatusCodes.NOT_IMPLEMENTED\n"
+        "                    await self._device.send_avr_command(\"PSSWL ON\")\n"
+        "                    await self._device.send_avr_command(\"PSSWL DOWN\")\n",
     )
 
 
 def patch_driver(path: Path, upstream_version: str) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
     version = upstream_version.removeprefix("v")
-    data["version"] = f"{version}-custom.2"
+    data["version"] = f"{version}-custom.3"
     data.setdefault("name", {})["en"] = "HEOS Integration (Custom Denon AVR)"
     data.setdefault("description", {})["en"] = (
         "HEOS integration with custom Denon AVR controls: 1 dB master-volume "
@@ -230,4 +287,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
