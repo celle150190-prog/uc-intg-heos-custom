@@ -60,7 +60,9 @@ class HeosRemote(RemoteEntity):
         if self._is_avr:
             button_mapping.extend(
                 [
-                    create_btn_mapping(Buttons.POWER, short="POWER_TOGGLE"),
+                    create_btn_mapping(
+                        Buttons.POWER, short=remote.Commands.TOGGLE.value
+                    ),
                     create_btn_mapping(
                         Buttons.CHANNEL_UP, short="SUBWOOFER_1_LEVEL_UP"
                     ),
@@ -73,7 +75,7 @@ class HeosRemote(RemoteEntity):
         super().__init__(
             entity_id,
             f"{player.name} Remote",
-            [remote.Features.ON_OFF, remote.Features.SEND_CMD],
+            [remote.Features.ON_OFF, remote.Features.TOGGLE, remote.Features.SEND_CMD],
             {remote.Attributes.STATE: remote.States.UNKNOWN},
             simple_commands=simple_commands,
             button_mapping=button_mapping,
@@ -208,11 +210,17 @@ class HeosRemote(RemoteEntity):
                         await player.volume_up(1 if self._is_avr else 5)
                     case "VOLUME_DOWN":
                         await player.volume_down(1 if self._is_avr else 5)
-                    case "POWER_TOGGLE":
+                    case remote.Commands.ON:
+                        await self._device.send_avr_command("PWON")
+                    case remote.Commands.OFF:
+                        await self._device.send_avr_command("PWSTANDBY")
+                    case remote.Commands.TOGGLE | "POWER_TOGGLE":
                         await self._device.toggle_avr_power()
                     case "SUBWOOFER_1_LEVEL_UP":
+                        await self._device.send_avr_command("PSSWL ON")
                         await self._device.send_avr_command("PSSWL UP")
                     case "SUBWOOFER_1_LEVEL_DOWN":
+                        await self._device.send_avr_command("PSSWL ON")
                         await self._device.send_avr_command("PSSWL DOWN")
                     case "MUTE_TOGGLE":
                         await player.toggle_mute()
