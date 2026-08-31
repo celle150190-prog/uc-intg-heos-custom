@@ -96,6 +96,11 @@ def patch_device(path: Path) -> None:
 def patch_remote(path: Path) -> None:
     replace_once(
         path,
+        "            [remote.Features.ON_OFF, remote.Features.SEND_CMD],\n",
+        "            [remote.Features.ON_OFF, remote.Features.TOGGLE, remote.Features.SEND_CMD],\n",
+    )
+    replace_once(
+        path,
         "        button_mapping = [\n"
         "            create_btn_mapping(Buttons.PLAY, short=\"PLAY\"),\n"
         "            create_btn_mapping(Buttons.STOP, short=\"STOP\"),\n"
@@ -118,7 +123,9 @@ def patch_remote(path: Path) -> None:
         "        if self._is_avr:\n"
         "            button_mapping.extend(\n"
         "                [\n"
-        "                    create_btn_mapping(Buttons.POWER, short=\"POWER_TOGGLE\"),\n"
+        "                    create_btn_mapping(\n"
+        "                        Buttons.POWER, short=remote.Commands.TOGGLE.value\n"
+        "                    ),\n"
         "                    create_btn_mapping(\n"
         "                        Buttons.CHANNEL_UP, short=\"SUBWOOFER_1_LEVEL_UP\"\n"
         "                    ),\n"
@@ -171,11 +178,17 @@ def patch_remote(path: Path) -> None:
         "                        await player.volume_up(1 if self._is_avr else 5)\n"
         "                    case \"VOLUME_DOWN\":\n"
         "                        await player.volume_down(1 if self._is_avr else 5)\n"
-        "                    case \"POWER_TOGGLE\":\n"
+        "                    case remote.Commands.ON:\n"
+        "                        await self._device.send_avr_command(\"PWON\")\n"
+        "                    case remote.Commands.OFF:\n"
+        "                        await self._device.send_avr_command(\"PWSTANDBY\")\n"
+        "                    case remote.Commands.TOGGLE | \"POWER_TOGGLE\":\n"
         "                        await self._device.toggle_avr_power()\n"
         "                    case \"SUBWOOFER_1_LEVEL_UP\":\n"
+        "                        await self._device.send_avr_command(\"PSSWL ON\")\n"
         "                        await self._device.send_avr_command(\"PSSWL UP\")\n"
         "                    case \"SUBWOOFER_1_LEVEL_DOWN\":\n"
+        "                        await self._device.send_avr_command(\"PSSWL ON\")\n"
         "                        await self._device.send_avr_command(\"PSSWL DOWN\")\n"
         "                    case \"MUTE_TOGGLE\":\n",
     )
@@ -223,3 +236,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
