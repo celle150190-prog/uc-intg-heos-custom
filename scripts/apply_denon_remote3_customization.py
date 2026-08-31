@@ -199,7 +199,7 @@ def patch_media_player(path: Path) -> None:
         "        entity_id = f\"media_player.{device_config.identifier}.{player.player_id}\"\n\n"
         "        features = FEATURES.copy()\n"
         "        if self._is_avr:\n"
-        "            features.extend([Features.TOGGLE, Features.CHANNEL_SWITCHER])\n\n"
+        "            features.append(Features.CHANNEL_SWITCHER)\n\n"
         "        super().__init__(\n"
         "            entity_id,\n"
         "            player.name,\n"
@@ -230,10 +230,6 @@ def patch_media_player(path: Path) -> None:
         "                        await self._device.send_avr_command(\"PWSTANDBY\")\n"
         "                    else:\n"
         "                        await player.stop()\n\n"
-        "                case Commands.TOGGLE:\n"
-        "                    if not self._is_avr:\n"
-        "                        return StatusCodes.NOT_IMPLEMENTED\n"
-        "                    await self._device.toggle_avr_power()\n\n"
         "                case Commands.PLAY_PAUSE:\n",
     )
     replace_once(
@@ -262,7 +258,7 @@ def patch_media_player(path: Path) -> None:
 def patch_driver(path: Path, upstream_version: str) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
     version = upstream_version.removeprefix("v")
-    data["version"] = f"{version}-custom.3"
+    data["version"] = f"{version}-custom.4"
     data.setdefault("name", {})["en"] = "HEOS Integration (Custom Denon AVR)"
     data.setdefault("description", {})["en"] = (
         "HEOS integration with custom Denon AVR controls: 1 dB master-volume "
