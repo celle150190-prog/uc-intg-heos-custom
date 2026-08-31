@@ -30,9 +30,7 @@ def patch_device(path: Path) -> None:
     replace_once(
         path,
         "import logging\n",
-        "import asyncio\nimport logging\n"
-        "from urllib.error import HTTPError, URLError\n"
-        "from urllib.request import urlopen\n",
+        "import asyncio\nimport logging\n",
     )
     replace_once(
         path,
@@ -40,7 +38,6 @@ def patch_device(path: Path) -> None:
         "_LOG = logging.getLogger(__name__)\n\n"
         "AVR_CONTROL_PORT = 23\n"
         "AVR_CONTROL_TIMEOUT = 3.0\n\n\n"
-        "AVR_HTTP_PORTS = (80, 8080)\n\n\n"
         "class HeosDevice",
     )
     replace_once(
@@ -69,34 +66,8 @@ def patch_device(path: Path) -> None:
         "                except (ConnectionError, OSError):\n"
         "                    pass\n\n"
         "    async def wake_avr(self) -> None:\n"
-        "        \"\"\"Turn on an AVR, including models that close Telnet in standby.\"\"\"\n"
-        "        try:\n"
-        "            await self.send_avr_command(\"PWON\")\n"
-        "            return\n"
-        "        except (ConnectionError, OSError, asyncio.TimeoutError):\n"
-        "            _LOG.debug(\"AVR Telnet wake failed; trying Denon HTTP control\")\n\n"
-        "        last_error: Exception | None = None\n"
-        "        for port in AVR_HTTP_PORTS:\n"
-        "            url = (\n"
-        "                f\"http://{self.address}:{port}\"\n"
-        "                \"/goform/formiPhoneAppDirect.xml?PWON\"\n"
-        "            )\n"
-        "            try:\n"
-        "                await asyncio.wait_for(\n"
-        "                    asyncio.to_thread(self._send_avr_http_request, url),\n"
-        "                    timeout=AVR_CONTROL_TIMEOUT,\n"
-        "                )\n"
-        "                return\n"
-        "            except (HTTPError, URLError, OSError, asyncio.TimeoutError) as err:\n"
-        "                last_error = err\n"
-        "                _LOG.debug(\"AVR HTTP wake failed on port %s\", port)\n\n"
-        "        if last_error is not None:\n"
-        "            raise ConnectionError(\"AVR power-on was rejected by Telnet and HTTP\") from last_error\n"
-        "        raise ConnectionError(\"AVR power-on failed without an HTTP attempt\")\n\n"
-        "    @staticmethod\n"
-        "    def _send_avr_http_request(url: str) -> None:\n"
-        "        with urlopen(url, timeout=AVR_CONTROL_TIMEOUT) as response:\n"
-        "            response.read()\n\n"
+        "        \"\"\"Turn on an AVR through the proven Telnet power-state path.\"\"\"\n"
+        "        await self.toggle_avr_power()\n\n"
         "    async def toggle_avr_power(self) -> None:\n"
         "        \"\"\"Toggle the AVR between on and standby using its actual power state.\"\"\"\n"
         "        writer: asyncio.StreamWriter | None = None\n"
@@ -261,7 +232,7 @@ def patch_media_player(path: Path) -> None:
         "                        try:\n"
         "                            await self._device.wake_avr()\n"
         "                        except (ConnectionError, OSError, asyncio.TimeoutError):\n"
-        "                            _LOG.debug(\"AVR IP wake failed; falling back to HEOS\")\n"
+        "                            _LOG.debug(\"AVR Telnet wake failed; falling back to HEOS\")\n"
         "                            await player.play()\n"
         "                    else:\n"
         "                        await player.play()\n\n"
@@ -298,7 +269,7 @@ def patch_media_player(path: Path) -> None:
 def patch_driver(path: Path, upstream_version: str) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
     version = upstream_version.removeprefix("v")
-    data["version"] = f"{version}-custom.6"
+    data["version"] = f"{version}-custom.7"
     data.setdefault("name", {})["en"] = "HEOS Integration (Custom Denon AVR)"
     data.setdefault("description", {})["en"] = (
         "HEOS integration with custom Denon AVR controls: 1 dB master-volume "
