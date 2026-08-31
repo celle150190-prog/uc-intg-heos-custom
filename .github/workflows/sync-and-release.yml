@@ -39,7 +39,7 @@ jobs:
           set -euo pipefail
           upstream_tag="$(gh api repos/mase1981/uc-intg-heos/releases/latest --jq .tag_name)"
           source_version="${upstream_tag#v}"
-          custom_version="${source_version}-custom.4"
+          custom_version="${source_version}-custom.5"
           current_tag="$(tr -d '\r\n' < UPSTREAM_VERSION)"
           should_build=false
           if [[ "${upstream_tag}" != "${current_tag}" || "${FORCE_REBUILD}" == "true" || "${GITHUB_EVENT_NAME}" == "push" ]]; then
@@ -131,6 +131,7 @@ jobs:
             - Added **Subwoofer 1 +** and **Subwoofer 1 −** controls to the AVR remote UI.
             - Remote 3 physical **Power** button directly toggles AVR power through the supported Remote command interface.
             - The Media UI directly handles AVR Power through its supported On/Off commands and Channel Up/Down for Subwoofer 1 Level, while preserving cover art and metadata.
+            - AVR power-on falls back to the HEOS wake command if Telnet is unavailable in standby.
             - Upstream source: ${{ steps.metadata.outputs.upstream_tag }}.
 
             ## Requirement
