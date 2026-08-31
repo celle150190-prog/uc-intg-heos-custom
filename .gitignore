@@ -1,0 +1,30 @@
+__pycache__/
+*.pyc
+.venv/
+build/
+dist/
+*.spec
+*.tar.gz
+*.egg-info/
+config.json
+*.log
+.idea/
+.DS_Store
+
+# Testing files (local only, never push)
+tests/
+simulator/
+tools/
+
+# Claude (local only)
+.claude/
+knowledge-base/
+*.knowledge.md
+
+# OS generated
+Thumbs.db
+ehthumbs.db
+
+# Integration specific
+artifacts/
+version_info.txt

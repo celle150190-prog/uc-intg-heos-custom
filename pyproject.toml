@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=65.0", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uc-intg-heos"
+description = "HEOS integration for Unfolded Circle Remote"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MPL-2.0"}
+authors = [
+    {name = "Meir Miyara", email = "meir.miyara@gmail.com"}
+]
+keywords = [
+    "unfoldedcircle",
+    "integration",
+    "heos",
+    "denon",
+    "marantz"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Home Automation",
+]
+dependencies = [
+    "ucapi-framework>=1.9.5",
+    "ucapi>=0.7.0",
+    "pyheos>=1.0.5",
+]
+dynamic = ["version"]
+
+[project.urls]
+"Homepage" = "https://github.com/mase1981/uc-intg-heos"
+
+[tool.setuptools]
+packages = ["uc_intg_heos"]
+
+[tool.setuptools.dynamic]
+version = {attr = "uc_intg_heos.__version__"}
+
+[project.scripts]
+uc-intg-heos = "uc_intg_heos:main"

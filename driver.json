@@ -1,0 +1,39 @@
+{
+  "driver_id": "uc-intg-heos",
+  "version": "2.1.2-custom.1",
+  "min_core_api": "0.22.0",
+  "name": {
+      "en": "HEOS Integration (Custom Denon AVR)"
+  },
+  "icon": "uc:music",
+  "description": {
+      "en": "HEOS integration with custom Denon AVR controls: 1 dB master-volume steps and Subwoofer 1 controls on Remote 3."
+  },
+  "developer": {
+    "name": "Meir Miyara",
+    "email": "meir.miyara@gmail.com",
+    "url": "https://github.com/mase1981"
+  },
+  "home_page": "https://github.com/celle150190-prog/uc-intg-heos-custom",
+  "setup_data_schema": {
+    "title": {
+      "en": "HEOS Integration Setup"
+    },
+    "settings": [
+      {
+        "id": "info",
+        "label": {
+          "en": "Account-Based Setup"
+        },
+        "field": {
+          "label": {
+            "value": {
+              "en": "Enter your HEOS device IP address and account credentials on the next screen. All HEOS devices on your account will be automatically discovered."
+            }
+          }
+        }
+      }
+    ]
+  },
+  "release_date": "2026-06-15"
+}

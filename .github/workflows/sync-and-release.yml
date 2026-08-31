@@ -1,0 +1,122 @@
+name: Sync latest upstream and publish custom release
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: Rebuild and republish the current upstream version.
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-release:
+    name: Sync, build, and publish
+    runs-on: ubuntu-24.04
+    env:
+      PYTHON_VER: 3.11.12-0.3.0
+    steps:
+      - name: Check out custom repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Find the newest upstream release
+        id: metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE_REBUILD: ${{ inputs.force_rebuild || 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          upstream_tag="$(gh api repos/mase1981/uc-intg-heos/releases/latest --jq .tag_name)"
+          source_version="${upstream_tag#v}"
+          custom_version="${source_version}-custom.1"
+          current_tag="$(tr -d '\\r\\n' < UPSTREAM_VERSION)"
+          should_build=false
+          if [[ "${upstream_tag}" != "${current_tag}" || "${FORCE_REBUILD}" == "true" ]]; then
+            should_build=true
+          fi
+          echo "upstream_tag=${upstream_tag}" >> "$GITHUB_OUTPUT"
+          echo "source_version=${source_version}" >> "$GITHUB_OUTPUT"
+          echo "custom_version=${custom_version}" >> "$GITHUB_OUTPUT"
+          echo "should_build=${should_build}" >> "$GITHUB_OUTPUT"
+
+      - name: Synchronize latest upstream source and apply customization
+        if: steps.metadata.outputs.should_build == 'true'
+        env:
+          UPSTREAM_TAG: ${{ steps.metadata.outputs.upstream_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          work_dir="$(mktemp -d)"
+          trap 'rm -rf "$work_dir"' EXIT
+          mkdir -p "$work_dir/source"
+          curl --fail --location --retry 3 \
+            "https://github.com/mase1981/uc-intg-heos/archive/refs/tags/${UPSTREAM_TAG}.tar.gz" \
+            | tar -xz --strip-components=1 -C "$work_dir/source"
+          rsync -a --delete \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=scripts \
+            --exclude=tests \
+            --exclude=UPSTREAM_VERSION \
+            --exclude=CUSTOMIZATION.md \
+            "$work_dir/source/" ./
+          python scripts/apply_denon_remote3_customization.py . --upstream-version "$UPSTREAM_TAG"
+          printf '%s\\n' "$UPSTREAM_TAG" > UPSTREAM_VERSION
+          python -m py_compile uc_intg_heos/device.py uc_intg_heos/remote.py uc_intg_heos/media_player.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          git commit -m "chore: sync upstream ${UPSTREAM_TAG} and apply Denon AVR customization"
+          git push origin HEAD:main
+
+      - name: Set up ARM64 build emulation
+        if: steps.metadata.outputs.should_build == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-arm binfmt-support qemu-user-static
+          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+
+      - name: Build Remote ARM64 integration package
+        if: steps.metadata.outputs.should_build == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --platform=aarch64 \
+            --user="$(id -u):$(id -g)" \
+            -v "${GITHUB_WORKSPACE}:/workspace" \
+            "docker.io/unfoldedcircle/r2-pyinstaller:${PYTHON_VER}" \
+            bash -c "cd /workspace && \
+              python -m pip install -r requirements.txt && \
+              pyinstaller --clean --onedir --name intg-heos \
+                --collect-all zeroconf \
+                --add-data driver.json:. \
+                uc_intg_heos/__init__.py"
+          artifact_name="uc-intg-heos-custom-${{ steps.metadata.outputs.source_version }}-aarch64"
+          mkdir -p artifacts/bin
+          mv dist/intg-heos/* artifacts/bin/
+          mv artifacts/bin/intg-heos artifacts/bin/driver
+          cp driver.json artifacts/
+          tar -czf "${artifact_name}.tar.gz" -C artifacts .
+          sha256sum "${artifact_name}.tar.gz" > "${artifact_name}.sha256"
+
+      - name: Publish custom release
+        if: steps.metadata.outputs.should_build == 'true'
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: uc-intg-heos-custom-${{ steps.metadata.outputs.source_version }}-aarch64.tar.gz,uc-intg-heos-custom-${{ steps.metadata.outputs.source_version }}-aarch64.sha256
+          tag: v${{ steps.metadata.outputs.custom_version }}
+          name: HEOS custom ${{ steps.metadata.outputs.custom_version }}
+          body: Built from upstream ${{ steps.metadata.outputs.upstream_tag }} with the Denon AVR Remote 3 customization.
+          allowUpdates: true
+          replacesArtifacts: true
