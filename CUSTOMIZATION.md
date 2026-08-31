@@ -10,6 +10,8 @@ every source update.
 - The physical `+` and `-` volume buttons use one HEOS volume step (about one
   dB on Denon/Marantz AVR volume scales), instead of the upstream five-step
   change.
+- The physical Power button queries the AVR's power state and switches between
+  On and Standby.
 - The custom remote UI exposes `+1 dB` and `-1 dB` buttons.
 - The physical Channel Up and Channel Down buttons control Subwoofer 1 Level
   Up and Down.

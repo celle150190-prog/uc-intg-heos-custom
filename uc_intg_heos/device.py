@@ -93,13 +93,48 @@ class HeosDevice(PollingDevice):
         return any(kw in model_lower for kw in AVR_KEYWORDS)
 
     async def send_avr_command(self, command: str) -> None:
-        """Send a Denon/Marantz IP-control command to the AVR Telnet port."""
+        """Send a Denon/Marantz IP-control command to the AVR Telnet port.
+
+        HEOS does not expose the AVR's Subwoofer 1 Level Adjust control.  Denon
+        and Marantz AVRs expose it through their documented TCP/IP control
+        protocol on port 23, using a carriage-return terminated command.
+        """
         writer: asyncio.StreamWriter | None = None
         try:
             _, writer = await asyncio.wait_for(
                 asyncio.open_connection(self.address, AVR_CONTROL_PORT),
                 timeout=AVR_CONTROL_TIMEOUT,
             )
+            writer.write(f"{command}\r".encode("ascii"))
+            await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)
+        finally:
+            if writer is not None:
+                writer.close()
+                try:
+                    await writer.wait_closed()
+                except (ConnectionError, OSError):
+                    pass
+
+    async def toggle_avr_power(self) -> None:
+        """Toggle the AVR between on and standby using its actual power state."""
+        writer: asyncio.StreamWriter | None = None
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(self.address, AVR_CONTROL_PORT),
+                timeout=AVR_CONTROL_TIMEOUT,
+            )
+            writer.write(b"PW?\r")
+            await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)
+            response = await asyncio.wait_for(
+                reader.readuntil(b"\r"), timeout=AVR_CONTROL_TIMEOUT
+            )
+            power_state = response.decode("ascii", errors="replace").strip().upper()
+            if power_state == "PWON":
+                command = "PWSTANDBY"
+            elif power_state in {"PWSTANDBY", "PWOFF"}:
+                command = "PWON"
+            else:
+                raise RuntimeError(f"Unexpected AVR power response: {power_state!r}")
             writer.write(f"{command}\r".encode("ascii"))
             await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)
         finally:

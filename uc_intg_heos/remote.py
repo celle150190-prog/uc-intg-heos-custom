@@ -60,6 +60,7 @@ class HeosRemote(RemoteEntity):
         if self._is_avr:
             button_mapping.extend(
                 [
+                    create_btn_mapping(Buttons.POWER, short="POWER_TOGGLE"),
                     create_btn_mapping(
                         Buttons.CHANNEL_UP, short="SUBWOOFER_1_LEVEL_UP"
                     ),
@@ -96,7 +97,13 @@ class HeosRemote(RemoteEntity):
             "SHUFFLE_ON", "SHUFFLE_OFF",
         ]
         if self._is_avr:
-            cmds.extend(["SUBWOOFER_1_LEVEL_UP", "SUBWOOFER_1_LEVEL_DOWN"])
+            cmds.extend(
+                [
+                    "POWER_TOGGLE",
+                    "SUBWOOFER_1_LEVEL_UP",
+                    "SUBWOOFER_1_LEVEL_DOWN",
+                ]
+            )
         cmds.extend(INPUT_COMMAND_MAP.keys())
 
         if len(device.players) > 1:
@@ -122,8 +129,18 @@ class HeosRemote(RemoteEntity):
             page1.add(create_ui_text("Master Volume (1 dB)", 0, 3, Size(4, 1)))
             page1.add(create_ui_text("+1 dB", 0, 4, Size(2, 1), cmd="VOLUME_UP"))
             page1.add(create_ui_text("-1 dB", 2, 4, Size(2, 1), cmd="VOLUME_DOWN"))
-            page1.add(create_ui_text("Subwoofer 1 +", 0, 5, Size(2, 1), cmd="SUBWOOFER_1_LEVEL_UP"))
-            page1.add(create_ui_text("Subwoofer 1 -", 2, 5, Size(2, 1), cmd="SUBWOOFER_1_LEVEL_DOWN"))
+            page1.add(
+                create_ui_text(
+                    "Subwoofer 1 +", 0, 5, Size(2, 1),
+                    cmd="SUBWOOFER_1_LEVEL_UP",
+                )
+            )
+            page1.add(
+                create_ui_text(
+                    "Subwoofer 1 -", 2, 5, Size(2, 1),
+                    cmd="SUBWOOFER_1_LEVEL_DOWN",
+                )
+            )
         else:
             page1.add(create_ui_text("Volume", 0, 3, Size(4, 1)))
             page1.add(create_ui_icon("uc:up-arrow-bold", 0, 4, cmd="VOLUME_UP"))
@@ -201,6 +218,8 @@ class HeosRemote(RemoteEntity):
                         await player.volume_up(1 if self._is_avr else 5)
                     case "VOLUME_DOWN":
                         await player.volume_down(1 if self._is_avr else 5)
+                    case "POWER_TOGGLE":
+                        await self._device.toggle_avr_power()
                     case "SUBWOOFER_1_LEVEL_UP":
                         await self._device.send_avr_command("PSSWL UP")
                     case "SUBWOOFER_1_LEVEL_DOWN":
