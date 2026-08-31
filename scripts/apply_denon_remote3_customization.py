@@ -96,11 +96,6 @@ def patch_device(path: Path) -> None:
 def patch_remote(path: Path) -> None:
     replace_once(
         path,
-        "            [remote.Features.ON_OFF, remote.Features.SEND_CMD],\n",
-        "            [remote.Features.ON_OFF, remote.Features.TOGGLE, remote.Features.SEND_CMD],\n",
-    )
-    replace_once(
-        path,
         "        button_mapping = [\n"
         "            create_btn_mapping(Buttons.PLAY, short=\"PLAY\"),\n"
         "            create_btn_mapping(Buttons.STOP, short=\"STOP\"),\n"
@@ -124,13 +119,16 @@ def patch_remote(path: Path) -> None:
         "            button_mapping.extend(\n"
         "                [\n"
         "                    create_btn_mapping(\n"
-        "                        Buttons.POWER, short=remote.Commands.TOGGLE.value\n"
+        "                        Buttons.POWER,\n"
+        "                        short=remote.create_send_cmd(\"POWER_TOGGLE\"),\n"
         "                    ),\n"
         "                    create_btn_mapping(\n"
-        "                        Buttons.CHANNEL_UP, short=\"SUBWOOFER_1_LEVEL_UP\"\n"
+        "                        Buttons.CHANNEL_UP,\n"
+        "                        short=remote.create_send_cmd(\"SUBWOOFER_1_LEVEL_UP\"),\n"
         "                    ),\n"
         "                    create_btn_mapping(\n"
-        "                        Buttons.CHANNEL_DOWN, short=\"SUBWOOFER_1_LEVEL_DOWN\"\n"
+        "                        Buttons.CHANNEL_DOWN,\n"
+        "                        short=remote.create_send_cmd(\"SUBWOOFER_1_LEVEL_DOWN\"),\n"
         "                    ),\n"
         "                ]\n"
         "            )\n",
@@ -178,11 +176,7 @@ def patch_remote(path: Path) -> None:
         "                        await player.volume_up(1 if self._is_avr else 5)\n"
         "                    case \"VOLUME_DOWN\":\n"
         "                        await player.volume_down(1 if self._is_avr else 5)\n"
-        "                    case remote.Commands.ON:\n"
-        "                        await self._device.send_avr_command(\"PWON\")\n"
-        "                    case remote.Commands.OFF:\n"
-        "                        await self._device.send_avr_command(\"PWSTANDBY\")\n"
-        "                    case remote.Commands.TOGGLE | \"POWER_TOGGLE\":\n"
+        "                    case \"POWER_TOGGLE\":\n"
         "                        await self._device.toggle_avr_power()\n"
         "                    case \"SUBWOOFER_1_LEVEL_UP\":\n"
         "                        await self._device.send_avr_command(\"PSSWL ON\")\n"
