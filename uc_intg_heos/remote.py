@@ -61,13 +61,16 @@ class HeosRemote(RemoteEntity):
             button_mapping.extend(
                 [
                     create_btn_mapping(
-                        Buttons.POWER, short=remote.Commands.TOGGLE.value
+                        Buttons.POWER,
+                        short=remote.create_send_cmd("POWER_TOGGLE"),
                     ),
                     create_btn_mapping(
-                        Buttons.CHANNEL_UP, short="SUBWOOFER_1_LEVEL_UP"
+                        Buttons.CHANNEL_UP,
+                        short=remote.create_send_cmd("SUBWOOFER_1_LEVEL_UP"),
                     ),
                     create_btn_mapping(
-                        Buttons.CHANNEL_DOWN, short="SUBWOOFER_1_LEVEL_DOWN"
+                        Buttons.CHANNEL_DOWN,
+                        short=remote.create_send_cmd("SUBWOOFER_1_LEVEL_DOWN"),
                     ),
                 ]
             )
@@ -75,7 +78,7 @@ class HeosRemote(RemoteEntity):
         super().__init__(
             entity_id,
             f"{player.name} Remote",
-            [remote.Features.ON_OFF, remote.Features.TOGGLE, remote.Features.SEND_CMD],
+            [remote.Features.ON_OFF, remote.Features.SEND_CMD],
             {remote.Attributes.STATE: remote.States.UNKNOWN},
             simple_commands=simple_commands,
             button_mapping=button_mapping,
@@ -210,11 +213,7 @@ class HeosRemote(RemoteEntity):
                         await player.volume_up(1 if self._is_avr else 5)
                     case "VOLUME_DOWN":
                         await player.volume_down(1 if self._is_avr else 5)
-                    case remote.Commands.ON:
-                        await self._device.send_avr_command("PWON")
-                    case remote.Commands.OFF:
-                        await self._device.send_avr_command("PWSTANDBY")
-                    case remote.Commands.TOGGLE | "POWER_TOGGLE":
+                    case "POWER_TOGGLE":
                         await self._device.toggle_avr_power()
                     case "SUBWOOFER_1_LEVEL_UP":
                         await self._device.send_avr_command("PSSWL ON")
