@@ -205,7 +205,7 @@ def patch_media_player(path: Path) -> None:
 def patch_driver(path: Path, upstream_version: str) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
     version = upstream_version.removeprefix("v")
-    data["version"] = f"{version}-custom.1"
+    data["version"] = f"{version}-custom.2"
     data.setdefault("name", {})["en"] = "HEOS Integration (Custom Denon AVR)"
     data.setdefault("description", {})["en"] = (
         "HEOS integration with custom Denon AVR controls: 1 dB master-volume "
