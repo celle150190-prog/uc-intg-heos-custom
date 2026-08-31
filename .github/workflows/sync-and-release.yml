@@ -120,7 +120,19 @@ jobs:
           artifacts: uc-intg-heos-custom-${{ steps.metadata.outputs.source_version }}-aarch64.tar.gz,uc-intg-heos-custom-${{ steps.metadata.outputs.source_version }}-aarch64.sha256
           tag: v${{ steps.metadata.outputs.custom_version }}
           name: HEOS custom ${{ steps.metadata.outputs.custom_version }}
-          body: Built from upstream ${{ steps.metadata.outputs.upstream_tag }} with the Denon AVR Remote 3 customization.
+          body: |
+            ## Patch Notes
+
+            - Denon/Marantz AVR master volume now uses 1 dB increments with the Remote 3 physical **+** and **−** buttons.
+            - Added **+1 dB** and **−1 dB** buttons to the AVR remote UI.
+            - Remote 3 physical **Channel Up/Down** now adjust **Subwoofer 1 Level**.
+            - Added **Subwoofer 1 +** and **Subwoofer 1 −** controls to the AVR remote UI.
+            - Remote 3 physical **Power** button queries the AVR state and switches it directly between On and Standby.
+            - Upstream source: ${{ steps.metadata.outputs.upstream_tag }}.
+
+            ## Requirement
+
+            Enable **Network Control → Always On** on the AVR and allow TCP port 23 from the Remote.
           allowUpdates: true
           replacesArtifacts: true
 
