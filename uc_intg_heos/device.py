@@ -7,6 +7,8 @@ HEOS device implementing PollingDevice pattern.
 
 import asyncio
 import logging
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 import time
 from typing import Any
 
@@ -23,6 +25,9 @@ _LOG = logging.getLogger(__name__)
 
 AVR_CONTROL_PORT = 23
 AVR_CONTROL_TIMEOUT = 3.0
+
+
+AVR_HTTP_PORTS = (80, 8080)
 
 
 class HeosDevice(PollingDevice):
@@ -109,6 +114,39 @@ class HeosDevice(PollingDevice):
                     await writer.wait_closed()
                 except (ConnectionError, OSError):
                     pass
+
+    async def wake_avr(self) -> None:
+        """Turn on an AVR, including models that close Telnet in standby."""
+        try:
+            await self.send_avr_command("PWON")
+            return
+        except (ConnectionError, OSError, asyncio.TimeoutError):
+            _LOG.debug("AVR Telnet wake failed; trying Denon HTTP control")
+
+        last_error: Exception | None = None
+        for port in AVR_HTTP_PORTS:
+            url = (
+                f"http://{self.address}:{port}"
+                "/goform/formiPhoneAppDirect.xml?PWON"
+            )
+            try:
+                await asyncio.wait_for(
+                    asyncio.to_thread(self._send_avr_http_request, url),
+                    timeout=AVR_CONTROL_TIMEOUT,
+                )
+                return
+            except (HTTPError, URLError, OSError, asyncio.TimeoutError) as err:
+                last_error = err
+                _LOG.debug("AVR HTTP wake failed on port %s", port)
+
+        if last_error is not None:
+            raise ConnectionError("AVR power-on was rejected by Telnet and HTTP") from last_error
+        raise ConnectionError("AVR power-on failed without an HTTP attempt")
+
+    @staticmethod
+    def _send_avr_http_request(url: str) -> None:
+        with urlopen(url, timeout=AVR_CONTROL_TIMEOUT) as response:
+            response.read()
 
     async def toggle_avr_power(self) -> None:
         """Toggle the AVR between on and standby using its actual power state."""
