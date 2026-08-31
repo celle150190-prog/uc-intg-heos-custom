@@ -92,10 +92,14 @@ class HeosMediaPlayer(MediaPlayerEntity):
 
         entity_id = f"media_player.{device_config.identifier}.{player.player_id}"
 
+        features = FEATURES.copy()
+        if self._is_avr:
+            features.extend([Features.TOGGLE, Features.CHANNEL_SWITCHER])
+
         super().__init__(
             entity_id,
             player.name,
-            FEATURES,
+            features,
             {
                 Attributes.STATE: States.UNKNOWN,
                 Attributes.VOLUME: 0,
@@ -241,18 +245,21 @@ class HeosMediaPlayer(MediaPlayerEntity):
         try:
             match cmd_id:
                 case Commands.ON:
-                    await player.play()
+                    if self._is_avr:
+                        await self._device.send_avr_command("PWON")
+                    else:
+                        await player.play()
 
                 case Commands.OFF:
                     if self._is_avr:
-                        try:
-                            await player.set_volume(0)
-                            await asyncio.sleep(0.3)
-                            await player.stop()
-                        except Exception:
-                            await player.stop()
+                        await self._device.send_avr_command("PWSTANDBY")
                     else:
                         await player.stop()
+
+                case Commands.TOGGLE:
+                    if not self._is_avr:
+                        return StatusCodes.NOT_IMPLEMENTED
+                    await self._device.toggle_avr_power()
 
                 case Commands.PLAY_PAUSE:
                     if player.state == PlayState.PLAY:
@@ -278,6 +285,18 @@ class HeosMediaPlayer(MediaPlayerEntity):
 
                 case Commands.VOLUME_DOWN:
                     await player.volume_down(1 if self._is_avr else params.get("step", 5))
+
+                case Commands.CHANNEL_UP:
+                    if not self._is_avr:
+                        return StatusCodes.NOT_IMPLEMENTED
+                    await self._device.send_avr_command("PSSWL ON")
+                    await self._device.send_avr_command("PSSWL UP")
+
+                case Commands.CHANNEL_DOWN:
+                    if not self._is_avr:
+                        return StatusCodes.NOT_IMPLEMENTED
+                    await self._device.send_avr_command("PSSWL ON")
+                    await self._device.send_avr_command("PSSWL DOWN")
 
                 case Commands.MUTE_TOGGLE:
                     await player.toggle_mute()
