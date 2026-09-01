@@ -208,7 +208,8 @@ def patch_media_player(path: Path) -> None:
         "        entity_id = f\"media_player.{device_config.identifier}.{player.player_id}\"\n\n"
         "        features = FEATURES.copy()\n"
         "        if self._is_avr:\n"
-        "            features.append(Features.CHANNEL_SWITCHER)\n\n"
+        "            features.append(Features.CHANNEL_SWITCHER)\n"
+        "            features.append(Features.TOGGLE)\n\n"
         "        super().__init__(\n"
         "            entity_id,\n"
         "            player.name,\n"
@@ -239,6 +240,10 @@ def patch_media_player(path: Path) -> None:
         "                        await self._device.send_avr_command(\"PWSTANDBY\")\n"
         "                    else:\n"
         "                        await player.stop()\n\n"
+        "                case Commands.TOGGLE:\n"
+        "                    if not self._is_avr:\n"
+        "                        return StatusCodes.NOT_IMPLEMENTED\n"
+        "                    await self._device.toggle_avr_power()\n\n"
         "                case Commands.PLAY_PAUSE:\n",
     )
     replace_once(
@@ -270,7 +275,7 @@ def patch_driver(path: Path, upstream_version: str) -> None:
     # Do not reuse the upstream driver's identifier: Remote Core otherwise
     # treats the custom package as a conflicting/upgraded copy of it.
     data["driver_id"] = CUSTOM_DRIVER_ID
-    data["version"] = f"{version}-custom.9"
+    data["version"] = f"{version}-custom.10"
     data.setdefault("name", {})["en"] = "HEOS Integration (Custom Denon AVR)"
     data.setdefault("description", {})["en"] = (
         "HEOS integration with custom Denon AVR controls: 1 dB master-volume "
