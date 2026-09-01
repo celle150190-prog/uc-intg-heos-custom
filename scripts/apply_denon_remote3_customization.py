@@ -14,6 +14,7 @@ from pathlib import Path
 
 
 CUSTOM_REPOSITORY = "https://github.com/celle150190-prog/uc-intg-heos-custom"
+CUSTOM_DRIVER_ID = "uc-intg-heos-custom"
 
 
 def replace_once(path: Path, old: str, new: str) -> None:
@@ -266,7 +267,10 @@ def patch_media_player(path: Path) -> None:
 def patch_driver(path: Path, upstream_version: str) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
     version = upstream_version.removeprefix("v")
-    data["version"] = f"{version}-custom.8"
+    # Do not reuse the upstream driver's identifier: Remote Core otherwise
+    # treats the custom package as a conflicting/upgraded copy of it.
+    data["driver_id"] = CUSTOM_DRIVER_ID
+    data["version"] = f"{version}-custom.9"
     data.setdefault("name", {})["en"] = "HEOS Integration (Custom Denon AVR)"
     data.setdefault("description", {})["en"] = (
         "HEOS integration with custom Denon AVR controls: 1 dB master-volume "
