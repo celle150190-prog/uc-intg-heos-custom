@@ -14,8 +14,8 @@ from pathlib import Path
 
 
 CUSTOM_REPOSITORY = "https://github.com/celle150190-prog/uc-intg-heos-custom"
-CUSTOM_PACKAGE_ID = "custom-11"
-CUSTOM_DRIVER_ID_PREFIX = "heos-avr-media"
+CUSTOM_PACKAGE_REVISION = "12"
+CUSTOM_DRIVER_ID_PREFIX = "heos_c"
 
 
 def replace_once(path: Path, old: str, new: str) -> None:
@@ -273,12 +273,13 @@ def patch_media_player(path: Path) -> None:
 def patch_driver(path: Path, upstream_version: str) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
     version = upstream_version.removeprefix("v")
-    # Every package gets a version-specific ID so it can be installed as a
-    # separate custom integration instead of updating an earlier package.
+    # Every package gets a compact, version-specific ID so it can be installed
+    # as a separate custom integration instead of updating an earlier package.
+    compact_version = version.replace(".", "")
     data["driver_id"] = (
-        f"{CUSTOM_DRIVER_ID_PREFIX}-{version.replace('.', '-')}-{CUSTOM_PACKAGE_ID}"
+        f"{CUSTOM_DRIVER_ID_PREFIX}{compact_version}_{CUSTOM_PACKAGE_REVISION}"
     )
-    data["version"] = f"{version}-{CUSTOM_PACKAGE_ID}"
+    data["version"] = f"{version}-custom.{CUSTOM_PACKAGE_REVISION}"
     data.setdefault("name", {})["en"] = "HEOS Integration (Custom Denon AVR Standalone)"
     data.setdefault("description", {})["en"] = (
         "HEOS integration with custom Denon AVR controls: 1 dB master-volume "
