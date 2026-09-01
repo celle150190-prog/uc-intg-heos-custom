@@ -39,7 +39,7 @@ jobs:
           set -euo pipefail
           upstream_tag="$(gh api repos/mase1981/uc-intg-heos/releases/latest --jq .tag_name)"
           source_version="${upstream_tag#v}"
-          custom_version="${source_version}-custom.9"
+          custom_version="${source_version}-custom.10"
           current_tag="$(tr -d '\r\n' < UPSTREAM_VERSION)"
           should_build=false
           if [[ "${upstream_tag}" != "${current_tag}" || "${FORCE_REBUILD}" == "true" || "${GITHUB_EVENT_NAME}" == "push" ]]; then
@@ -132,6 +132,7 @@ jobs:
             - Remote 3 physical **Power** button directly toggles AVR power through the supported Remote command interface.
             - The Media UI directly handles AVR Power through its supported On/Off commands and Channel Up/Down for Subwoofer 1 Level, while preserving cover art and metadata.
             - Media UI power-on now sends the verified direct Telnet command `PWON`, matching the AVR-X4400H standby control protocol.
+            - Remote 3 physical Power in the Media UI now uses the media-player **Toggle** command and directly queries/switches AVR power through Telnet.
             - Uses a dedicated custom driver ID to avoid a setup conflict with the upstream HEOS integration.
             - Upstream source: ${{ steps.metadata.outputs.upstream_tag }}.
 
