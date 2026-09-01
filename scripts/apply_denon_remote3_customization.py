@@ -66,8 +66,9 @@ def patch_device(path: Path) -> None:
         "                except (ConnectionError, OSError):\n"
         "                    pass\n\n"
         "    async def wake_avr(self) -> None:\n"
-        "        \"\"\"Turn on an AVR through the proven Telnet power-state path.\"\"\"\n"
-        "        await self.toggle_avr_power()\n\n"
+        "        \"\"\"Turn on an AVR through its direct Telnet power command.\"\"\"\n"
+        "        _LOG.info(\"Media UI requested AVR power on\")\n"
+        "        await self.send_avr_command(\"PWON\")\n\n"
         "    async def toggle_avr_power(self) -> None:\n"
         "        \"\"\"Toggle the AVR between on and standby using its actual power state.\"\"\"\n"
         "        writer: asyncio.StreamWriter | None = None\n"
@@ -229,11 +230,7 @@ def patch_media_player(path: Path) -> None:
         "                case Commands.PLAY_PAUSE:\n",
         "                case Commands.ON:\n"
         "                    if self._is_avr:\n"
-        "                        try:\n"
-        "                            await self._device.wake_avr()\n"
-        "                        except (ConnectionError, OSError, asyncio.TimeoutError):\n"
-        "                            _LOG.debug(\"AVR Telnet wake failed; falling back to HEOS\")\n"
-        "                            await player.play()\n"
+        "                        await self._device.wake_avr()\n"
         "                    else:\n"
         "                        await player.play()\n\n"
         "                case Commands.OFF:\n"
@@ -269,7 +266,7 @@ def patch_media_player(path: Path) -> None:
 def patch_driver(path: Path, upstream_version: str) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
     version = upstream_version.removeprefix("v")
-    data["version"] = f"{version}-custom.7"
+    data["version"] = f"{version}-custom.8"
     data.setdefault("name", {})["en"] = "HEOS Integration (Custom Denon AVR)"
     data.setdefault("description", {})["en"] = (
         "HEOS integration with custom Denon AVR controls: 1 dB master-volume "
