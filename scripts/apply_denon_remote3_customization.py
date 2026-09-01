@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 CUSTOM_REPOSITORY = "https://github.com/celle150190-prog/uc-intg-heos-custom"
-CUSTOM_PACKAGE_REVISION = "12"
+CUSTOM_PACKAGE_REVISION = "13"
 CUSTOM_DRIVER_ID_PREFIX = "heos_c"
 
 
@@ -199,6 +199,22 @@ def patch_remote(path: Path) -> None:
 
 
 def patch_media_player(path: Path) -> None:
+    replace_once(
+        path,
+        "        params = params or {}\n"
+        "        player = self._device.get_player(self._player_id)\n"
+        "        if not player:\n"
+        "            return StatusCodes.SERVICE_UNAVAILABLE\n\n"
+        "        try:\n",
+        "        params = params or {}\n"
+        "        player = self._device.get_player(self._player_id)\n"
+        "        avr_power_command = self._is_avr and cmd_id in (\n"
+        "            Commands.ON, Commands.OFF, Commands.TOGGLE\n"
+        "        )\n"
+        "        if not player and not avr_power_command:\n"
+        "            return StatusCodes.SERVICE_UNAVAILABLE\n\n"
+        "        try:\n",
+    )
     replace_once(
         path,
         "        entity_id = f\"media_player.{device_config.identifier}.{player.player_id}\"\n\n"
