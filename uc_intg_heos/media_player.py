@@ -240,7 +240,10 @@ class HeosMediaPlayer(MediaPlayerEntity):
     ) -> StatusCodes:
         params = params or {}
         player = self._device.get_player(self._player_id)
-        if not player:
+        avr_power_command = self._is_avr and cmd_id in (
+            Commands.ON, Commands.OFF, Commands.TOGGLE
+        )
+        if not player and not avr_power_command:
             return StatusCodes.SERVICE_UNAVAILABLE
 
         try:
