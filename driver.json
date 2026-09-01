@@ -1,6 +1,6 @@
 {
-  "driver_id": "heos-avr-media-2-1-2-custom-11",
-  "version": "2.1.2-custom-11",
+  "driver_id": "heos_c212_12",
+  "version": "2.1.2-custom.12",
   "min_core_api": "0.22.0",
   "name": {
     "en": "HEOS Integration (Custom Denon AVR Standalone)"
