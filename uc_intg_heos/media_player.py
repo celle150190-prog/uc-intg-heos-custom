@@ -95,6 +95,7 @@ class HeosMediaPlayer(MediaPlayerEntity):
         features = FEATURES.copy()
         if self._is_avr:
             features.append(Features.CHANNEL_SWITCHER)
+            features.append(Features.TOGGLE)
 
         super().__init__(
             entity_id,
@@ -255,6 +256,11 @@ class HeosMediaPlayer(MediaPlayerEntity):
                         await self._device.send_avr_command("PWSTANDBY")
                     else:
                         await player.stop()
+
+                case Commands.TOGGLE:
+                    if not self._is_avr:
+                        return StatusCodes.NOT_IMPLEMENTED
+                    await self._device.toggle_avr_power()
 
                 case Commands.PLAY_PAUSE:
                     if player.state == PlayState.PLAY:

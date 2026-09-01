@@ -1,6 +1,6 @@
 {
   "driver_id": "uc-intg-heos-custom",
-  "version": "2.1.2-custom.9",
+  "version": "2.1.2-custom.10",
   "min_core_api": "0.22.0",
   "name": {
     "en": "HEOS Integration (Custom Denon AVR)"
