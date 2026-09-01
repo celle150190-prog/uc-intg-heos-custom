@@ -39,7 +39,7 @@ jobs:
           set -euo pipefail
           upstream_tag="$(gh api repos/mase1981/uc-intg-heos/releases/latest --jq .tag_name)"
           source_version="${upstream_tag#v}"
-          custom_version="${source_version}-custom.11"
+          custom_version="${source_version}-custom.12"
           current_tag="$(tr -d '\r\n' < UPSTREAM_VERSION)"
           should_build=false
           if [[ "${upstream_tag}" != "${current_tag}" || "${FORCE_REBUILD}" == "true" || "${GITHUB_EVENT_NAME}" == "push" ]]; then
@@ -134,6 +134,7 @@ jobs:
             - Media UI power-on now sends the verified direct Telnet command `PWON`, matching the AVR-X4400H standby control protocol.
             - Remote 3 physical Power in the Media UI now uses the media-player **Toggle** command and directly queries/switches AVR power through Telnet.
             - This release has its own version-specific driver ID and installs as a standalone custom integration; do not select **Update existing driver**.
+            - Uses a compact standalone driver ID for reliable launch on the Remote.
             - Uses a dedicated custom driver ID to avoid a setup conflict with the upstream HEOS integration.
             - Upstream source: ${{ steps.metadata.outputs.upstream_tag }}.
 
