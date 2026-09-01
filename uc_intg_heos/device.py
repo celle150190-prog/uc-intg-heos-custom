@@ -111,8 +111,9 @@ class HeosDevice(PollingDevice):
                     pass
 
     async def wake_avr(self) -> None:
-        """Turn on an AVR through the proven Telnet power-state path."""
-        await self.toggle_avr_power()
+        """Turn on an AVR through its direct Telnet power command."""
+        _LOG.info("Media UI requested AVR power on")
+        await self.send_avr_command("PWON")
 
     async def toggle_avr_power(self) -> None:
         """Toggle the AVR between on and standby using its actual power state."""

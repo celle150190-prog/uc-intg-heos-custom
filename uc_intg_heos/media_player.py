@@ -246,11 +246,7 @@ class HeosMediaPlayer(MediaPlayerEntity):
             match cmd_id:
                 case Commands.ON:
                     if self._is_avr:
-                        try:
-                            await self._device.wake_avr()
-                        except (ConnectionError, OSError, asyncio.TimeoutError):
-                            _LOG.debug("AVR Telnet wake failed; falling back to HEOS")
-                            await player.play()
+                        await self._device.wake_avr()
                     else:
                         await player.play()
 
