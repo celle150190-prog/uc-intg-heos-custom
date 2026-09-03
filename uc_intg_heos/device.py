@@ -125,8 +125,10 @@ class HeosDevice(PollingDevice):
             )
             writer.write(b"PW?\r")
             await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)
+            # Some Denon models answer PW? without a trailing CR.  A normal
+            # stream read mirrors the proven direct PowerShell test.
             response = await asyncio.wait_for(
-                reader.readuntil(b"\r"), timeout=AVR_CONTROL_TIMEOUT
+                reader.read(64), timeout=AVR_CONTROL_TIMEOUT
             )
             power_state = response.decode("ascii", errors="replace").strip().upper()
             if power_state == "PWON":

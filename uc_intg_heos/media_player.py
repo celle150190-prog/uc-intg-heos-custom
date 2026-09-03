@@ -260,7 +260,10 @@ class HeosMediaPlayer(MediaPlayerEntity):
 
                 case Commands.OFF:
                     if self._is_avr:
-                        await self._device.send_avr_command("PWSTANDBY")
+                        # Remote 3's physical power key dispatches OFF in
+                        # Media UI even while the AVR is already in standby.
+                        # Query the AVR so repeated presses genuinely toggle.
+                        await self._device.toggle_avr_power()
                     else:
                         await player.stop()
 
