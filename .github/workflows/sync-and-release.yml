@@ -39,7 +39,7 @@ jobs:
           set -euo pipefail
           upstream_tag="$(gh api repos/mase1981/uc-intg-heos/releases/latest --jq .tag_name)"
           source_version="${upstream_tag#v}"
-          custom_version="${source_version}-custom.13"
+          custom_version="${source_version}-custom.14"
           current_tag="$(tr -d '\r\n' < UPSTREAM_VERSION)"
           should_build=false
           if [[ "${upstream_tag}" != "${current_tag}" || "${FORCE_REBUILD}" == "true" || "${GITHUB_EVENT_NAME}" == "push" ]]; then
@@ -136,6 +136,7 @@ jobs:
             - This release has its own version-specific driver ID and installs as a standalone custom integration; do not select **Update existing driver**.
             - Uses a compact standalone driver ID for reliable launch on the Remote.
             - AVR power-on now works even after HEOS disconnects in standby: `PWON` is sent directly without requiring an active HEOS player.
+            - Keep the AVR Media UI in standby (instead of unavailable) after the HEOS standby disconnect, so Remote 3 still sends the physical Power command.
             - Uses a dedicated custom driver ID to avoid a setup conflict with the upstream HEOS integration.
             - Upstream source: ${{ steps.metadata.outputs.upstream_tag }}.
 
