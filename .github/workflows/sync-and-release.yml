@@ -39,7 +39,7 @@ jobs:
           set -euo pipefail
           upstream_tag="$(gh api repos/mase1981/uc-intg-heos/releases/latest --jq .tag_name)"
           source_version="${upstream_tag#v}"
-          custom_revision="$(sed -nE 's/^CUSTOM_PACKAGE_REVISION = "([0-9]+)"$/\\1/p' scripts/apply_denon_remote3_customization.py)"
+          custom_revision="$(sed -nE 's/^CUSTOM_PACKAGE_REVISION = "([0-9]+)"$/\1/p' scripts/apply_denon_remote3_customization.py)"
           if [[ -z "$custom_revision" ]]; then
             echo "Could not determine CUSTOM_PACKAGE_REVISION" >&2
             exit 1
