@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 CUSTOM_REPOSITORY = "https://github.com/celle150190-prog/uc-intg-heos-custom"
-CUSTOM_PACKAGE_REVISION = "14"
+CUSTOM_PACKAGE_REVISION = "15"
 CUSTOM_DRIVER_ID_PREFIX = "heos_c"
 
 
@@ -81,8 +81,10 @@ def patch_device(path: Path) -> None:
         "            )\n"
         "            writer.write(b\"PW?\\r\")\n"
         "            await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)\n"
+        "            # Some Denon models answer PW? without a trailing CR.  A normal\n"
+        "            # stream read mirrors the proven direct PowerShell test.\n"
         "            response = await asyncio.wait_for(\n"
-        "                reader.readuntil(b\"\\r\"), timeout=AVR_CONTROL_TIMEOUT\n"
+        "                reader.read(64), timeout=AVR_CONTROL_TIMEOUT\n"
         "            )\n"
         "            power_state = response.decode(\"ascii\", errors=\"replace\").strip().upper()\n"
         "            if power_state == \"PWON\":\n"
@@ -275,7 +277,10 @@ def patch_media_player(path: Path) -> None:
         "                        await player.play()\n\n"
         "                case Commands.OFF:\n"
         "                    if self._is_avr:\n"
-        "                        await self._device.send_avr_command(\"PWSTANDBY\")\n"
+        "                        # Remote 3's physical power key dispatches OFF in\n"
+        "                        # Media UI even while the AVR is already in standby.\n"
+        "                        # Query the AVR so repeated presses genuinely toggle.\n"
+        "                        await self._device.toggle_avr_power()\n"
         "                    else:\n"
         "                        await player.stop()\n\n"
         "                case Commands.TOGGLE:\n"
@@ -341,3 +346,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
