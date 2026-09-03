@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 CUSTOM_REPOSITORY = "https://github.com/celle150190-prog/uc-intg-heos-custom"
-CUSTOM_PACKAGE_REVISION = "13"
+CUSTOM_PACKAGE_REVISION = "14"
 CUSTOM_DRIVER_ID_PREFIX = "heos_c"
 
 
@@ -199,6 +199,27 @@ def patch_remote(path: Path) -> None:
 
 
 def patch_media_player(path: Path) -> None:
+    replace_once(
+        path,
+        "        if self._device.state == \"UNAVAILABLE\":\n"
+        "            self.update({Attributes.STATE: States.UNAVAILABLE})\n"
+        "            return\n\n"
+        "        player = self._device.get_player(self._player_id)\n"
+        "        if not player:\n"
+        "            self.update({Attributes.STATE: States.UNAVAILABLE})\n"
+        "            return\n",
+        "        if self._device.state == \"UNAVAILABLE\":\n"
+        "            # HEOS disconnects while a Denon AVR is in standby. Keep the\n"
+        "            # Media UI active so Remote 3 can still deliver a power command.\n"
+        "            state = States.STANDBY if self._is_avr else States.UNAVAILABLE\n"
+        "            self.update({Attributes.STATE: state})\n"
+        "            return\n\n"
+        "        player = self._device.get_player(self._player_id)\n"
+        "        if not player:\n"
+        "            state = States.STANDBY if self._is_avr else States.UNAVAILABLE\n"
+        "            self.update({Attributes.STATE: state})\n"
+        "            return\n",
+    )
     replace_once(
         path,
         "        params = params or {}\n"
