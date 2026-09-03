@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 CUSTOM_REPOSITORY = "https://github.com/celle150190-prog/uc-intg-heos-custom"
-CUSTOM_PACKAGE_REVISION = "19"
+CUSTOM_PACKAGE_REVISION = "20"
 CUSTOM_DRIVER_ID_PREFIX = "heos_c"
 
 
@@ -363,6 +363,45 @@ def patch_setup_flow(path: Path) -> None:
     )
 
 
+def patch_integration_driver(path: Path) -> None:
+    """Do not make the setup wizard depend on one immediate HEOS connection.
+
+    HEOS players are created dynamically after a successful connection, so this
+    remains a connection-first integration.  The difference is that the
+    connection runs in the background after the configuration has been saved;
+    a temporary refusal can therefore no longer fail the Remote setup wizard.
+    """
+    replace_once(
+        path,
+        "    async def on_r2_enter_standby(self) -> None:\n",
+        "    def on_device_added(self, device_config: HeosDeviceConfig | None) -> None:\n"
+        "        \"\"\"Save first; discover HEOS players without blocking setup.\"\"\"\n"
+        "        if device_config is None:\n"
+        "            return\n"
+        "        device_id = self.get_device_id(device_config)\n"
+        "        _LOG.info(\"[%s] Configuration saved; discovering HEOS players in background\", device_id)\n"
+        "        # BaseSetupFlow waits for _pending_setup_task when it is set.\n"
+        "        # Keep it clear so a short HEOS refusal cannot become a\n"
+        "        # CONNECTION_REFUSED result in the Remote UI.\n"
+        "        self._pending_setup_task = None\n"
+        "        self._loop.create_task(self._connect_and_register_after_setup(device_config))\n\n"
+        "    async def _connect_and_register_after_setup(\n"
+        "        self, device_config: HeosDeviceConfig\n"
+        "    ) -> None:\n"
+        "        device_id = self.get_device_id(device_config)\n"
+        "        try:\n"
+        "            if await self.async_add_configured_device(device_config):\n"
+        "                _LOG.info(\"[%s] HEOS players registered after setup\", device_id)\n"
+        "            else:\n"
+        "                _LOG.warning(\"[%s] Initial HEOS connection failed; retry scheduled\", device_id)\n"
+        "                self._schedule_reconnect(device_id)\n"
+        "        except Exception as err:  # pylint: disable=broad-exception-caught\n"
+        "            _LOG.warning(\"[%s] Initial HEOS connection failed: %s\", device_id, err)\n"
+        "            self._schedule_reconnect(device_id)\n\n"
+        "    async def on_r2_enter_standby(self) -> None:\n",
+    )
+
+
 def patch_driver(path: Path, upstream_version: str) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
     version = upstream_version.removeprefix("v")
@@ -393,6 +432,7 @@ def main() -> None:
     patch_remote(repo / "uc_intg_heos" / "remote.py")
     patch_media_player(repo / "uc_intg_heos" / "media_player.py")
     patch_setup_flow(repo / "uc_intg_heos" / "setup_flow.py")
+    patch_integration_driver(repo / "uc_intg_heos" / "driver.py")
     patch_driver(repo / "driver.json", args.upstream_version)
 
 
