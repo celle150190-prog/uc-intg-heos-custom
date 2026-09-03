@@ -81,21 +81,21 @@ class HeosSetupFlow(BaseSetupFlow[HeosDeviceConfig]):
             for pid, p in (players or {}).items():
                 _LOG.info("  - %s (Model: %s, ID: %d)", p.name, p.model, pid)
 
-        except (ConnectionError, OSError, TimeoutError) as err:
-            # The AVR can briefly refuse HEOS' validation connection even
-            # though its HEOS service is available. Save the configuration
-            # and let the driver's background reconnect establish it.
-            _LOG.warning(
-                "HEOS validation at %s was temporarily refused; "
-                "setup will continue and reconnect automatically: %s",
-                host,
-                err,
-            )
         except HeosError as err:
             error_str = str(err).lower()
-            if "sign_in" in error_str or "auth" in error_str:
+            if "unable to connect" in error_str or "connection timed out" in error_str:
+                # pyheos wraps socket refusals as HeosError. Save the
+                # configuration and let the driver's retry loop reconnect.
+                _LOG.warning(
+                    "HEOS validation at %s was temporarily refused; "
+                    "setup will continue and reconnect automatically: %s",
+                    host,
+                    err,
+                )
+            elif "sign_in" in error_str or "auth" in error_str:
                 raise ValueError(f"Authentication failed: {err}") from err
-            raise ConnectionError(f"Cannot connect to HEOS at {host}: {err}") from err
+            else:
+                raise ConnectionError(f"Cannot connect to HEOS at {host}: {err}") from err
         finally:
             try:
                 await heos.disconnect()
