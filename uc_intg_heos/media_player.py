@@ -292,10 +292,21 @@ class HeosMediaPlayer(MediaPlayerEntity):
                     await player.set_volume(vol)
 
                 case Commands.VOLUME_UP:
-                    await player.volume_up(1 if self._is_avr else params.get("step", 5))
+                    if self._is_avr:
+                        # MV is the Denon Main Zone command. Each command is
+                        # 0.5 dB, so send it twice for the requested 1 dB step.
+                        await self._device.send_avr_command("MVUP")
+                        await self._device.send_avr_command("MVUP")
+                    else:
+                        await player.volume_up(params.get("step", 5))
 
                 case Commands.VOLUME_DOWN:
-                    await player.volume_down(1 if self._is_avr else params.get("step", 5))
+                    if self._is_avr:
+                        # MVDOWN operates Main Zone, not Zone 2 or Zone 3.
+                        await self._device.send_avr_command("MVDOWN")
+                        await self._device.send_avr_command("MVDOWN")
+                    else:
+                        await player.volume_down(params.get("step", 5))
 
                 case Commands.CHANNEL_UP:
                     if not self._is_avr:
