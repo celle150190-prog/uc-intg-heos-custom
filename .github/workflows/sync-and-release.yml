@@ -39,7 +39,12 @@ jobs:
           set -euo pipefail
           upstream_tag="$(gh api repos/mase1981/uc-intg-heos/releases/latest --jq .tag_name)"
           source_version="${upstream_tag#v}"
-          custom_version="${source_version}-custom.14"
+          custom_revision="$(sed -nE 's/^CUSTOM_PACKAGE_REVISION = "([0-9]+)"$/\\1/p' scripts/apply_denon_remote3_customization.py)"
+          if [[ -z "$custom_revision" ]]; then
+            echo "Could not determine CUSTOM_PACKAGE_REVISION" >&2
+            exit 1
+          fi
+          custom_version="${source_version}-custom.${custom_revision}"
           current_tag="$(tr -d '\r\n' < UPSTREAM_VERSION)"
           should_build=false
           if [[ "${upstream_tag}" != "${current_tag}" || "${FORCE_REBUILD}" == "true" || "${GITHUB_EVENT_NAME}" == "push" ]]; then
