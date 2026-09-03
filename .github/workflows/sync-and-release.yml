@@ -136,6 +136,7 @@ jobs:
             - Added **Subwoofer 1 +** and **Subwoofer 1 −** controls to the AVR remote UI.
             - Remote 3 physical **Power** button directly toggles AVR power through the supported Remote command interface.
             - The Media UI directly handles AVR Power through its supported On/Off commands and Channel Up/Down for Subwoofer 1 Level, while preserving cover art and metadata.
+            - Remote 3 physical **+** and **−** now use direct Denon Main Zone commands (MVUP/MVDOWN): two 0.5 dB commands per press produce a 1 dB step and never control Zone 2 or Zone 3.
             - Media UI power-on now sends the verified direct Telnet command `PWON`, matching the AVR-X4400H standby control protocol.
             - Remote 3 physical Power in the Media UI is handled statefully: it queries `PW?`, then sends `PWSTANDBY` or `PWON`, so a repeat press also turns the AVR on from standby.
             - This release has its own version-specific driver ID and installs as a standalone custom integration; do not select **Update existing driver**.

@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 CUSTOM_REPOSITORY = "https://github.com/celle150190-prog/uc-intg-heos-custom"
-CUSTOM_PACKAGE_REVISION = "15"
+CUSTOM_PACKAGE_REVISION = "16"
 CUSTOM_DRIVER_ID_PREFIX = "heos_c"
 
 
@@ -296,9 +296,20 @@ def patch_media_player(path: Path) -> None:
         "                case Commands.VOLUME_DOWN:\n"
         "                    await player.volume_down(params.get(\"step\", 5))\n",
         "                case Commands.VOLUME_UP:\n"
-        "                    await player.volume_up(1 if self._is_avr else params.get(\"step\", 5))\n\n"
+        "                    if self._is_avr:\n"
+        "                        # MV is the Denon Main Zone command. Each command is\n"
+        "                        # 0.5 dB, so send it twice for the requested 1 dB step.\n"
+        "                        await self._device.send_avr_command(\"MVUP\")\n"
+        "                        await self._device.send_avr_command(\"MVUP\")\n"
+        "                    else:\n"
+        "                        await player.volume_up(params.get(\"step\", 5))\n\n"
         "                case Commands.VOLUME_DOWN:\n"
-        "                    await player.volume_down(1 if self._is_avr else params.get(\"step\", 5))\n\n"
+        "                    if self._is_avr:\n"
+        "                        # MVDOWN operates Main Zone, not Zone 2 or Zone 3.\n"
+        "                        await self._device.send_avr_command(\"MVDOWN\")\n"
+        "                        await self._device.send_avr_command(\"MVDOWN\")\n"
+        "                    else:\n"
+        "                        await player.volume_down(params.get(\"step\", 5))\n\n"
         "                case Commands.CHANNEL_UP:\n"
         "                    if not self._is_avr:\n"
         "                        return StatusCodes.NOT_IMPLEMENTED\n"
