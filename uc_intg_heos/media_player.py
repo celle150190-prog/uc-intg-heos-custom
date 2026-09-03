@@ -123,12 +123,16 @@ class HeosMediaPlayer(MediaPlayerEntity):
 
     async def sync_state(self) -> None:
         if self._device.state == "UNAVAILABLE":
-            self.update({Attributes.STATE: States.UNAVAILABLE})
+            # HEOS disconnects while a Denon AVR is in standby. Keep the
+            # Media UI active so Remote 3 can still deliver a power command.
+            state = States.STANDBY if self._is_avr else States.UNAVAILABLE
+            self.update({Attributes.STATE: state})
             return
 
         player = self._device.get_player(self._player_id)
         if not player:
-            self.update({Attributes.STATE: States.UNAVAILABLE})
+            state = States.STANDBY if self._is_avr else States.UNAVAILABLE
+            self.update({Attributes.STATE: state})
             return
 
         self._player = player
