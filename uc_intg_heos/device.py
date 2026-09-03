@@ -111,9 +111,13 @@ class HeosDevice(PollingDevice):
                     pass
 
     async def wake_avr(self) -> None:
-        """Turn on an AVR through its direct Telnet power command."""
+        """Turn on Main Zone and keep unused Zone 3 off."""
         _LOG.info("Media UI requested AVR power on")
         await self.send_avr_command("PWON")
+        # The AVR needs a moment to finish waking before it accepts
+        # the Zone 3 power command.
+        await asyncio.sleep(1)
+        await self.send_avr_command("Z3OFF")
 
     async def toggle_avr_power(self) -> None:
         """Toggle the AVR between on and standby using its actual power state."""
@@ -132,6 +136,9 @@ class HeosDevice(PollingDevice):
             )
             power_state = response.decode("ascii", errors="replace").strip().upper()
             if power_state == "PWON":
+                # Ensure unused Zone 3 does not stay active in standby.
+                writer.write(b"Z3OFF\r")
+                await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)
                 command = "PWSTANDBY"
             elif power_state in {"PWSTANDBY", "PWOFF"}:
                 command = "PWON"
@@ -139,6 +146,10 @@ class HeosDevice(PollingDevice):
                 raise RuntimeError(f"Unexpected AVR power response: {power_state!r}")
             writer.write(f"{command}\r".encode("ascii"))
             await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)
+            if command == "PWON":
+                await asyncio.sleep(1)
+                writer.write(b"Z3OFF\r")
+                await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)
         finally:
             if writer is not None:
                 writer.close()
