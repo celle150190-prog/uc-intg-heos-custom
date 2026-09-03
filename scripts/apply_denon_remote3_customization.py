@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 CUSTOM_REPOSITORY = "https://github.com/celle150190-prog/uc-intg-heos-custom"
-CUSTOM_PACKAGE_REVISION = "17"
+CUSTOM_PACKAGE_REVISION = "18"
 CUSTOM_DRIVER_ID_PREFIX = "heos_c"
 
 
@@ -334,6 +334,35 @@ def patch_media_player(path: Path) -> None:
     )
 
 
+def patch_setup_flow(path: Path) -> None:
+    """Keep setup alive when HEOS temporarily refuses its validation socket."""
+    replace_once(
+        path,
+        "        except HeosError as err:\n"
+        "            error_str = str(err).lower()\n"
+        "            if \"sign_in\" in error_str or \"auth\" in error_str:\n"
+        "                raise ValueError(f\"Authentication failed: {err}\") from err\n"
+        "            raise ConnectionError(f\"Cannot connect to HEOS at {host}: {err}\") from err\n"
+        "        finally:\n",
+        "        except (ConnectionError, OSError, TimeoutError) as err:\n"
+        "            # The AVR can briefly refuse HEOS' validation connection even\n"
+        "            # though its HEOS service is available. Save the configuration\n"
+        "            # and let the driver's background reconnect establish it.\n"
+        "            _LOG.warning(\n"
+        "                \"HEOS validation at %s was temporarily refused; \"\n"
+        "                \"setup will continue and reconnect automatically: %s\",\n"
+        "                host,\n"
+        "                err,\n"
+        "            )\n"
+        "        except HeosError as err:\n"
+        "            error_str = str(err).lower()\n"
+        "            if \"sign_in\" in error_str or \"auth\" in error_str:\n"
+        "                raise ValueError(f\"Authentication failed: {err}\") from err\n"
+        "            raise ConnectionError(f\"Cannot connect to HEOS at {host}: {err}\") from err\n"
+        "        finally:\n",
+    )
+
+
 def patch_driver(path: Path, upstream_version: str) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
     version = upstream_version.removeprefix("v")
@@ -363,6 +392,7 @@ def main() -> None:
     patch_device(repo / "uc_intg_heos" / "device.py")
     patch_remote(repo / "uc_intg_heos" / "remote.py")
     patch_media_player(repo / "uc_intg_heos" / "media_player.py")
+    patch_setup_flow(repo / "uc_intg_heos" / "setup_flow.py")
     patch_driver(repo / "driver.json", args.upstream_version)
 
 
