@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 CUSTOM_REPOSITORY = "https://github.com/celle150190-prog/uc-intg-heos-custom"
-CUSTOM_PACKAGE_REVISION = "18"
+CUSTOM_PACKAGE_REVISION = "19"
 CUSTOM_DRIVER_ID_PREFIX = "heos_c"
 
 
@@ -344,21 +344,21 @@ def patch_setup_flow(path: Path) -> None:
         "                raise ValueError(f\"Authentication failed: {err}\") from err\n"
         "            raise ConnectionError(f\"Cannot connect to HEOS at {host}: {err}\") from err\n"
         "        finally:\n",
-        "        except (ConnectionError, OSError, TimeoutError) as err:\n"
-        "            # The AVR can briefly refuse HEOS' validation connection even\n"
-        "            # though its HEOS service is available. Save the configuration\n"
-        "            # and let the driver's background reconnect establish it.\n"
-        "            _LOG.warning(\n"
-        "                \"HEOS validation at %s was temporarily refused; \"\n"
-        "                \"setup will continue and reconnect automatically: %s\",\n"
-        "                host,\n"
-        "                err,\n"
-        "            )\n"
         "        except HeosError as err:\n"
         "            error_str = str(err).lower()\n"
-        "            if \"sign_in\" in error_str or \"auth\" in error_str:\n"
+        "            if \"unable to connect\" in error_str or \"connection timed out\" in error_str:\n"
+        "                # pyheos wraps socket refusals as HeosError. Save the\n"
+        "                # configuration and let the driver's retry loop reconnect.\n"
+        "                _LOG.warning(\n"
+        "                    \"HEOS validation at %s was temporarily refused; \"\n"
+        "                    \"setup will continue and reconnect automatically: %s\",\n"
+        "                    host,\n"
+        "                    err,\n"
+        "                )\n"
+        "            elif \"sign_in\" in error_str or \"auth\" in error_str:\n"
         "                raise ValueError(f\"Authentication failed: {err}\") from err\n"
-        "            raise ConnectionError(f\"Cannot connect to HEOS at {host}: {err}\") from err\n"
+        "            else:\n"
+        "                raise ConnectionError(f\"Cannot connect to HEOS at {host}: {err}\") from err\n"
         "        finally:\n",
     )
 
