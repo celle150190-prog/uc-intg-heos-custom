@@ -244,17 +244,14 @@ class HeosMediaPlayer(MediaPlayerEntity):
     ) -> StatusCodes:
         params = params or {}
         player = self._device.get_player(self._player_id)
-        avr_power_command = self._is_avr and cmd_id in (
-            Commands.ON, Commands.OFF, Commands.TOGGLE
-        )
-        if not player and not avr_power_command:
+        if not player:
             return StatusCodes.SERVICE_UNAVAILABLE
 
         try:
             match cmd_id:
                 case Commands.ON:
                     if self._is_avr:
-                        await self._device.wake_avr()
+                        await self._device.wake_avr(player)
                     else:
                         await player.play()
 
@@ -263,14 +260,14 @@ class HeosMediaPlayer(MediaPlayerEntity):
                         # Remote 3's physical power key dispatches OFF in
                         # Media UI even while the AVR is already in standby.
                         # Query the AVR so repeated presses genuinely toggle.
-                        await self._device.toggle_avr_power()
+                        await self._device.toggle_avr_power(player)
                     else:
                         await player.stop()
 
                 case Commands.TOGGLE:
                     if not self._is_avr:
                         return StatusCodes.NOT_IMPLEMENTED
-                    await self._device.toggle_avr_power()
+                    await self._device.toggle_avr_power(player)
 
                 case Commands.PLAY_PAUSE:
                     if player.state == PlayState.PLAY:

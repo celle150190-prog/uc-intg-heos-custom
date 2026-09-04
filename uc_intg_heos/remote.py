@@ -214,7 +214,7 @@ class HeosRemote(RemoteEntity):
                     case "VOLUME_DOWN":
                         await player.volume_down(1 if self._is_avr else 5)
                     case "POWER_TOGGLE":
-                        await self._device.toggle_avr_power()
+                        await self._device.toggle_avr_power(player)
                     case "SUBWOOFER_1_LEVEL_UP":
                         await self._device.send_avr_command("PSSWL ON")
                         await self._device.send_avr_command("PSSWL UP")

@@ -165,16 +165,12 @@ class HeosDevice(PollingDevice):
                 except (ConnectionError, OSError):
                     pass
 
-    async def wake_avr(self) -> None:
-        """Turn on Main Zone only when it is actually in standby."""
-        power_state = await self.get_avr_power_state()
-        if power_state == "PWON":
-            _LOG.debug("Media UI requested AVR power on; Main Zone is already on")
-            return
-        _LOG.info("Media UI requested AVR power on from %s", power_state)
-        await self.send_avr_command("PWON")
+    async def wake_avr(self, player: HeosPlayer) -> None:
+        """Start the AVR exclusively through the normal HEOS player path."""
+        _LOG.info("Media UI requested AVR power on through HEOS player")
+        await player.play()
 
-    async def toggle_avr_power(self) -> None:
+    async def toggle_avr_power(self, player: HeosPlayer) -> None:
         """Toggle Main Zone without assuming a one-line Telnet response."""
         # The AVR may include unsolicited status lines in the reply to PW?.
         # Reuse the parser above, which searches the complete response for
@@ -183,7 +179,9 @@ class HeosDevice(PollingDevice):
         if power_state == "PWON":
             command = "PWSTANDBY"
         elif power_state in {"PWSTANDBY", "PWOFF"}:
-            command = "PWON"
+            _LOG.info("Media UI requested AVR power on through HEOS player")
+            await player.play()
+            return
         else:
             raise RuntimeError(f"Unexpected AVR power response: {power_state!r}")
         _LOG.info("Media UI requested AVR power toggle: %s -> %s", power_state, command)
