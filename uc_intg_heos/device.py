@@ -110,14 +110,42 @@ class HeosDevice(PollingDevice):
                 except (ConnectionError, OSError):
                     pass
 
+    async def get_avr_power_state(self) -> str:
+        """Read the AVR Main Zone power state without changing it."""
+        writer: asyncio.StreamWriter | None = None
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(self.address, AVR_CONTROL_PORT),
+                timeout=AVR_CONTROL_TIMEOUT,
+            )
+            writer.write(b"PW?\r")
+            await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)
+            response = await asyncio.wait_for(
+                reader.read(128), timeout=AVR_CONTROL_TIMEOUT
+            ).decode("ascii", errors="replace").upper()
+            if "PWSTANDBY" in response:
+                return "PWSTANDBY"
+            if "PWOFF" in response:
+                return "PWOFF"
+            if "PWON" in response:
+                return "PWON"
+            raise RuntimeError(f"Unexpected AVR power response: {response!r}")
+        finally:
+            if writer is not None:
+                writer.close()
+                try:
+                    await writer.wait_closed()
+                except (ConnectionError, OSError):
+                    pass
+
     async def wake_avr(self) -> None:
-        """Turn on Main Zone and keep unused Zone 3 off."""
-        _LOG.info("Media UI requested AVR power on")
+        """Turn on Main Zone only when it is actually in standby."""
+        power_state = await self.get_avr_power_state()
+        if power_state == "PWON":
+            _LOG.debug("Media UI requested AVR power on; Main Zone is already on")
+            return
+        _LOG.info("Media UI requested AVR power on from %s", power_state)
         await self.send_avr_command("PWON")
-        # The AVR needs a moment to finish waking before it accepts
-        # the Zone 3 power command.
-        await asyncio.sleep(1)
-        await self.send_avr_command("Z3OFF")
 
     async def toggle_avr_power(self) -> None:
         """Toggle the AVR between on and standby using its actual power state."""
@@ -136,9 +164,6 @@ class HeosDevice(PollingDevice):
             )
             power_state = response.decode("ascii", errors="replace").strip().upper()
             if power_state == "PWON":
-                # Ensure unused Zone 3 does not stay active in standby.
-                writer.write(b"Z3OFF\r")
-                await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)
                 command = "PWSTANDBY"
             elif power_state in {"PWSTANDBY", "PWOFF"}:
                 command = "PWON"
@@ -146,10 +171,6 @@ class HeosDevice(PollingDevice):
                 raise RuntimeError(f"Unexpected AVR power response: {power_state!r}")
             writer.write(f"{command}\r".encode("ascii"))
             await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)
-            if command == "PWON":
-                await asyncio.sleep(1)
-                writer.write(b"Z3OFF\r")
-                await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)
         finally:
             if writer is not None:
                 writer.close()

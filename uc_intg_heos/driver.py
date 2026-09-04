@@ -37,32 +37,6 @@ class HeosDriver(BaseIntegrationDriver[HeosDevice, HeosDeviceConfig]):
         )
         self._reconnect_tasks: dict[str, asyncio.Task] = {}
 
-    def on_device_added(self, device_config: HeosDeviceConfig | None) -> None:
-        """Save first; discover HEOS players without blocking setup."""
-        if device_config is None:
-            return
-        device_id = self.get_device_id(device_config)
-        _LOG.info("[%s] Configuration saved; discovering HEOS players in background", device_id)
-        # BaseSetupFlow waits for _pending_setup_task when it is set.
-        # Keep it clear so a short HEOS refusal cannot become a
-        # CONNECTION_REFUSED result in the Remote UI.
-        self._pending_setup_task = None
-        self._loop.create_task(self._connect_and_register_after_setup(device_config))
-
-    async def _connect_and_register_after_setup(
-        self, device_config: HeosDeviceConfig
-    ) -> None:
-        device_id = self.get_device_id(device_config)
-        try:
-            if await self.async_add_configured_device(device_config):
-                _LOG.info("[%s] HEOS players registered after setup", device_id)
-            else:
-                _LOG.warning("[%s] Initial HEOS connection failed; retry scheduled", device_id)
-                self._schedule_reconnect(device_id)
-        except Exception as err:  # pylint: disable=broad-exception-caught
-            _LOG.warning("[%s] Initial HEOS connection failed: %s", device_id, err)
-            self._schedule_reconnect(device_id)
-
     async def on_r2_enter_standby(self) -> None:
         """Keep HEOS connections alive while the Remote is in standby.
 
