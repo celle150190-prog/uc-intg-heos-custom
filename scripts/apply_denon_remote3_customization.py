@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 CUSTOM_REPOSITORY = "https://github.com/celle150190-prog/uc-intg-heos-custom"
-CUSTOM_PACKAGE_REVISION = "20"
+CUSTOM_PACKAGE_REVISION = "21"
 CUSTOM_DRIVER_ID_PREFIX = "heos_c"
 
 
@@ -67,14 +67,41 @@ def patch_device(path: Path) -> None:
         "                    await writer.wait_closed()\n"
         "                except (ConnectionError, OSError):\n"
         "                    pass\n\n"
+        "    async def get_avr_power_state(self) -> str:\n"
+        "        \"\"\"Read the AVR Main Zone power state without changing it.\"\"\"\n"
+        "        writer: asyncio.StreamWriter | None = None\n"
+        "        try:\n"
+        "            reader, writer = await asyncio.wait_for(\n"
+        "                asyncio.open_connection(self.address, AVR_CONTROL_PORT),\n"
+        "                timeout=AVR_CONTROL_TIMEOUT,\n"
+        "            )\n"
+        "            writer.write(b\"PW?\\r\")\n"
+        "            await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)\n"
+        "            response = await asyncio.wait_for(\n"
+        "                reader.read(128), timeout=AVR_CONTROL_TIMEOUT\n"
+        "            ).decode(\"ascii\", errors=\"replace\").upper()\n"
+        "            if \"PWSTANDBY\" in response:\n"
+        "                return \"PWSTANDBY\"\n"
+        "            if \"PWOFF\" in response:\n"
+        "                return \"PWOFF\"\n"
+        "            if \"PWON\" in response:\n"
+        "                return \"PWON\"\n"
+        "            raise RuntimeError(f\"Unexpected AVR power response: {response!r}\")\n"
+        "        finally:\n"
+        "            if writer is not None:\n"
+        "                writer.close()\n"
+        "                try:\n"
+        "                    await writer.wait_closed()\n"
+        "                except (ConnectionError, OSError):\n"
+        "                    pass\n\n"
         "    async def wake_avr(self) -> None:\n"
-        "        \"\"\"Turn on Main Zone and keep unused Zone 3 off.\"\"\"\n"
-        "        _LOG.info(\"Media UI requested AVR power on\")\n"
-        "        await self.send_avr_command(\"PWON\")\n"
-        "        # The AVR needs a moment to finish waking before it accepts\n"
-        "        # the Zone 3 power command.\n"
-        "        await asyncio.sleep(1)\n"
-        "        await self.send_avr_command(\"Z3OFF\")\n\n"
+        "        \"\"\"Turn on Main Zone only when it is actually in standby.\"\"\"\n"
+        "        power_state = await self.get_avr_power_state()\n"
+        "        if power_state == \"PWON\":\n"
+        "            _LOG.debug(\"Media UI requested AVR power on; Main Zone is already on\")\n"
+        "            return\n"
+        "        _LOG.info(\"Media UI requested AVR power on from %s\", power_state)\n"
+        "        await self.send_avr_command(\"PWON\")\n\n"
         "    async def toggle_avr_power(self) -> None:\n"
         "        \"\"\"Toggle the AVR between on and standby using its actual power state.\"\"\"\n"
         "        writer: asyncio.StreamWriter | None = None\n"
@@ -92,9 +119,6 @@ def patch_device(path: Path) -> None:
         "            )\n"
         "            power_state = response.decode(\"ascii\", errors=\"replace\").strip().upper()\n"
         "            if power_state == \"PWON\":\n"
-        "                # Ensure unused Zone 3 does not stay active in standby.\n"
-        "                writer.write(b\"Z3OFF\\r\")\n"
-        "                await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)\n"
         "                command = \"PWSTANDBY\"\n"
         "            elif power_state in {\"PWSTANDBY\", \"PWOFF\"}:\n"
         "                command = \"PWON\"\n"
@@ -102,10 +126,6 @@ def patch_device(path: Path) -> None:
         "                raise RuntimeError(f\"Unexpected AVR power response: {power_state!r}\")\n"
         "            writer.write(f\"{command}\\r\".encode(\"ascii\"))\n"
         "            await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)\n"
-        "            if command == \"PWON\":\n"
-        "                await asyncio.sleep(1)\n"
-        "                writer.write(b\"Z3OFF\\r\")\n"
-        "                await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)\n"
         "        finally:\n"
         "            if writer is not None:\n"
         "                writer.close()\n"
@@ -334,74 +354,6 @@ def patch_media_player(path: Path) -> None:
     )
 
 
-def patch_setup_flow(path: Path) -> None:
-    """Keep setup alive when HEOS temporarily refuses its validation socket."""
-    replace_once(
-        path,
-        "        except HeosError as err:\n"
-        "            error_str = str(err).lower()\n"
-        "            if \"sign_in\" in error_str or \"auth\" in error_str:\n"
-        "                raise ValueError(f\"Authentication failed: {err}\") from err\n"
-        "            raise ConnectionError(f\"Cannot connect to HEOS at {host}: {err}\") from err\n"
-        "        finally:\n",
-        "        except HeosError as err:\n"
-        "            error_str = str(err).lower()\n"
-        "            if \"unable to connect\" in error_str or \"connection timed out\" in error_str:\n"
-        "                # pyheos wraps socket refusals as HeosError. Save the\n"
-        "                # configuration and let the driver's retry loop reconnect.\n"
-        "                _LOG.warning(\n"
-        "                    \"HEOS validation at %s was temporarily refused; \"\n"
-        "                    \"setup will continue and reconnect automatically: %s\",\n"
-        "                    host,\n"
-        "                    err,\n"
-        "                )\n"
-        "            elif \"sign_in\" in error_str or \"auth\" in error_str:\n"
-        "                raise ValueError(f\"Authentication failed: {err}\") from err\n"
-        "            else:\n"
-        "                raise ConnectionError(f\"Cannot connect to HEOS at {host}: {err}\") from err\n"
-        "        finally:\n",
-    )
-
-
-def patch_integration_driver(path: Path) -> None:
-    """Do not make the setup wizard depend on one immediate HEOS connection.
-
-    HEOS players are created dynamically after a successful connection, so this
-    remains a connection-first integration.  The difference is that the
-    connection runs in the background after the configuration has been saved;
-    a temporary refusal can therefore no longer fail the Remote setup wizard.
-    """
-    replace_once(
-        path,
-        "    async def on_r2_enter_standby(self) -> None:\n",
-        "    def on_device_added(self, device_config: HeosDeviceConfig | None) -> None:\n"
-        "        \"\"\"Save first; discover HEOS players without blocking setup.\"\"\"\n"
-        "        if device_config is None:\n"
-        "            return\n"
-        "        device_id = self.get_device_id(device_config)\n"
-        "        _LOG.info(\"[%s] Configuration saved; discovering HEOS players in background\", device_id)\n"
-        "        # BaseSetupFlow waits for _pending_setup_task when it is set.\n"
-        "        # Keep it clear so a short HEOS refusal cannot become a\n"
-        "        # CONNECTION_REFUSED result in the Remote UI.\n"
-        "        self._pending_setup_task = None\n"
-        "        self._loop.create_task(self._connect_and_register_after_setup(device_config))\n\n"
-        "    async def _connect_and_register_after_setup(\n"
-        "        self, device_config: HeosDeviceConfig\n"
-        "    ) -> None:\n"
-        "        device_id = self.get_device_id(device_config)\n"
-        "        try:\n"
-        "            if await self.async_add_configured_device(device_config):\n"
-        "                _LOG.info(\"[%s] HEOS players registered after setup\", device_id)\n"
-        "            else:\n"
-        "                _LOG.warning(\"[%s] Initial HEOS connection failed; retry scheduled\", device_id)\n"
-        "                self._schedule_reconnect(device_id)\n"
-        "        except Exception as err:  # pylint: disable=broad-exception-caught\n"
-        "            _LOG.warning(\"[%s] Initial HEOS connection failed: %s\", device_id, err)\n"
-        "            self._schedule_reconnect(device_id)\n\n"
-        "    async def on_r2_enter_standby(self) -> None:\n",
-    )
-
-
 def patch_driver(path: Path, upstream_version: str) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
     version = upstream_version.removeprefix("v")
@@ -431,8 +383,6 @@ def main() -> None:
     patch_device(repo / "uc_intg_heos" / "device.py")
     patch_remote(repo / "uc_intg_heos" / "remote.py")
     patch_media_player(repo / "uc_intg_heos" / "media_player.py")
-    patch_setup_flow(repo / "uc_intg_heos" / "setup_flow.py")
-    patch_integration_driver(repo / "uc_intg_heos" / "driver.py")
     patch_driver(repo / "driver.json", args.upstream_version)
 
 
