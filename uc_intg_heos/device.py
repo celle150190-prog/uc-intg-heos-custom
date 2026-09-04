@@ -7,6 +7,8 @@ HEOS device implementing PollingDevice pattern.
 
 import asyncio
 import logging
+
+import denonavr
 import time
 from typing import Any
 
@@ -41,6 +43,10 @@ class HeosDevice(PollingDevice):
         self._player_unsubs: list = []
         self._controller_unsub = None
         self._last_update_time: float = 0.0
+        # Dedicated controller for Media/Remote UI power only. It is not
+        # used for HEOS playback, metadata, volume or subwoofer controls.
+        self._denon_receiver: denonavr.DenonAVR | None = None
+        self._denon_power_lock = asyncio.Lock()
 
     @property
     def identifier(self) -> str:
@@ -110,82 +116,39 @@ class HeosDevice(PollingDevice):
                 except (ConnectionError, OSError):
                     pass
 
-    async def log_avr_zone_states(self, checkpoint: str) -> None:
-        """Log passive Main/Zone 2/Zone 3 status for startup diagnosis."""
-        writer: asyncio.StreamWriter | None = None
-        try:
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(self.address, AVR_CONTROL_PORT),
-                timeout=AVR_CONTROL_TIMEOUT,
-            )
-            # These status queries cannot turn on or off an AVR zone.
-            writer.write(b"PW?\rZ2?\rZ3?\r")
-            await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)
-            await asyncio.sleep(0.2)
-            response = await asyncio.wait_for(
-                reader.read(512), timeout=AVR_CONTROL_TIMEOUT
-            )
-            state = response.decode("ascii", errors="replace").replace("\r", " | ")
-            _LOG.info("AVR passive state [%s]: %s", checkpoint, state)
-        except (asyncio.TimeoutError, ConnectionError, OSError) as err:
-            _LOG.debug("AVR passive state query failed at %s: %s", checkpoint, err)
-        finally:
-            if writer is not None:
-                writer.close()
-                try:
-                    await writer.wait_closed()
-                except (ConnectionError, OSError):
-                    pass
+    async def _get_denon_receiver(self) -> denonavr.DenonAVR:
+        """Create the official Denon controller on first power action."""
+        async with self._denon_power_lock:
+            if self._denon_receiver is None:
+                self._denon_receiver = denonavr.DenonAVR(
+                    host=self.address, timeout=AVR_CONTROL_TIMEOUT
+                )
+            return self._denon_receiver
 
-    async def get_avr_power_state(self) -> str:
-        """Read the AVR Main Zone power state without changing it."""
-        writer: asyncio.StreamWriter | None = None
-        try:
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(self.address, AVR_CONTROL_PORT),
-                timeout=AVR_CONTROL_TIMEOUT,
-            )
-            writer.write(b"PW?\r")
-            await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)
-            response = await asyncio.wait_for(
-                reader.read(128), timeout=AVR_CONTROL_TIMEOUT
-            ).decode("ascii", errors="replace").upper()
-            if "PWSTANDBY" in response:
-                return "PWSTANDBY"
-            if "PWOFF" in response:
-                return "PWOFF"
-            if "PWON" in response:
-                return "PWON"
-            raise RuntimeError(f"Unexpected AVR power response: {response!r}")
-        finally:
-            if writer is not None:
-                writer.close()
-                try:
-                    await writer.wait_closed()
-                except (ConnectionError, OSError):
-                    pass
+    async def power_on_avr(self) -> None:
+        """Power on through the same Denon library command as the Denon integration."""
+        receiver = await self._get_denon_receiver()
+        _LOG.info("[%s] Media/Remote UI: Denon power on", self.log_id)
+        await receiver.async_power_on()
 
-    async def wake_avr(self, player: HeosPlayer) -> None:
-        """Start the AVR exclusively through the normal HEOS player path."""
-        _LOG.info("Media UI requested AVR power on through HEOS player")
-        await player.play()
+    async def power_off_avr(self) -> None:
+        """Power off through the same Denon library command as the Denon integration."""
+        receiver = await self._get_denon_receiver()
+        _LOG.info("[%s] Media/Remote UI: Denon power off", self.log_id)
+        await receiver.async_power_off()
 
-    async def toggle_avr_power(self, player: HeosPlayer) -> None:
-        """Toggle Main Zone without assuming a one-line Telnet response."""
-        # The AVR may include unsolicited status lines in the reply to PW?.
-        # Reuse the parser above, which searches the complete response for
-        # the actual Main Zone state instead of requiring an exact match.
-        power_state = await self.get_avr_power_state()
-        if power_state == "PWON":
-            command = "PWSTANDBY"
-        elif power_state in {"PWSTANDBY", "PWOFF"}:
-            _LOG.info("Media UI requested AVR power on through HEOS player")
-            await player.play()
-            return
+    async def toggle_avr_power(self) -> None:
+        """Use the official Denon Integration toggle semantics for Main Zone power."""
+        receiver = await self._get_denon_receiver()
+        # Match the Denon integration: its remote UI calls power_off when
+        # the controller reports ON, otherwise it calls power_on. Refresh
+        # this lightweight controller first because this driver keeps HEOS
+        # Media UI as its primary UI and has no Denon polling loop.
+        await receiver.async_update()
+        if receiver.power == "ON":
+            await self.power_off_avr()
         else:
-            raise RuntimeError(f"Unexpected AVR power response: {power_state!r}")
-        _LOG.info("Media UI requested AVR power toggle: %s -> %s", power_state, command)
-        await self.send_avr_command(command)
+            await self.power_on_avr()
 
     def _throttled_push_update(self) -> None:
         now = time.monotonic()
@@ -196,7 +159,6 @@ class HeosDevice(PollingDevice):
 
     async def establish_connection(self) -> Heos:
         await self._teardown_client()
-        await self.log_avr_zone_states("before HEOS connection")
         options = HeosOptions(
             host=self._device_config.host,
             events=True,
@@ -209,7 +171,6 @@ class HeosDevice(PollingDevice):
         )
         self._heos = Heos(options)
         await self._heos.connect()
-        await self.log_avr_zone_states("after HEOS connection")
 
         if self._device_config.username and self._device_config.password:
             try:
@@ -221,7 +182,6 @@ class HeosDevice(PollingDevice):
                 _LOG.warning("[%s] HEOS sign-in failed: %s", self.log_id, err)
 
         self._players = await self._heos.get_players()
-        await self.log_avr_zone_states("after HEOS player discovery")
         _LOG.info(
             "[%s] Discovered %d player(s): %s",
             self.log_id,
@@ -236,7 +196,6 @@ class HeosDevice(PollingDevice):
         except Exception as err:
             _LOG.warning("[%s] Initial account data load failed: %s", self.log_id, err)
 
-        await self.log_avr_zone_states("after HEOS startup")
         self._state = "ON"
         self.push_update()
         return self._heos

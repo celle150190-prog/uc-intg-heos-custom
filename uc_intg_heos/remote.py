@@ -177,7 +177,9 @@ class HeosRemote(RemoteEntity):
         async with self._cmd_lock:
             command = (params or {}).get("command", cmd_id)
             player = self._device.get_player(self._player_id)
-            if not player:
+            # Power is provided by the dedicated Denon controller and
+            # remains usable when HEOS has disconnected in standby.
+            if not player and command != "POWER_TOGGLE":
                 return StatusCodes.SERVICE_UNAVAILABLE
 
             now = time.monotonic()
@@ -214,7 +216,7 @@ class HeosRemote(RemoteEntity):
                     case "VOLUME_DOWN":
                         await player.volume_down(1 if self._is_avr else 5)
                     case "POWER_TOGGLE":
-                        await self._device.toggle_avr_power(player)
+                        await self._device.toggle_avr_power()
                     case "SUBWOOFER_1_LEVEL_UP":
                         await self._device.send_avr_command("PSSWL ON")
                         await self._device.send_avr_command("PSSWL UP")

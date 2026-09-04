@@ -1,3 +1,4 @@
 ucapi-framework>=1.9.5
 ucapi>=0.7.0
 pyheos>=1.0.5
+denonavr @ git+https://github.com/henrikwidlund/denonavr.git@ecf8021049b37ceb9d9c640dea1199d088f27cc7
