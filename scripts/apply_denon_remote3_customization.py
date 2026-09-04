@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 CUSTOM_REPOSITORY = "https://github.com/celle150190-prog/uc-intg-heos-custom"
-CUSTOM_PACKAGE_REVISION = "22"
+CUSTOM_PACKAGE_REVISION = "23"
 CUSTOM_DRIVER_ID_PREFIX = "heos_c"
 
 
@@ -120,15 +120,11 @@ def patch_device(path: Path) -> None:
         "                    await writer.wait_closed()\n"
         "                except (ConnectionError, OSError):\n"
         "                    pass\n\n"
-        "    async def wake_avr(self) -> None:\n"
-        "        \"\"\"Turn on Main Zone only when it is actually in standby.\"\"\"\n"
-        "        power_state = await self.get_avr_power_state()\n"
-        "        if power_state == \"PWON\":\n"
-        "            _LOG.debug(\"Media UI requested AVR power on; Main Zone is already on\")\n"
-        "            return\n"
-        "        _LOG.info(\"Media UI requested AVR power on from %s\", power_state)\n"
-        "        await self.send_avr_command(\"PWON\")\n\n"
-        "    async def toggle_avr_power(self) -> None:\n"
+        "    async def wake_avr(self, player: HeosPlayer) -> None:\n"
+        "        \"\"\"Start the AVR exclusively through the normal HEOS player path.\"\"\"\n"
+        "        _LOG.info(\"Media UI requested AVR power on through HEOS player\")\n"
+        "        await player.play()\n\n"
+        "    async def toggle_avr_power(self, player: HeosPlayer) -> None:\n"
         "        \"\"\"Toggle Main Zone without assuming a one-line Telnet response.\"\"\"\n"
         "        # The AVR may include unsolicited status lines in the reply to PW?.\n"
         "        # Reuse the parser above, which searches the complete response for\n"
@@ -137,7 +133,9 @@ def patch_device(path: Path) -> None:
         "        if power_state == \"PWON\":\n"
         "            command = \"PWSTANDBY\"\n"
         "        elif power_state in {\"PWSTANDBY\", \"PWOFF\"}:\n"
-        "            command = \"PWON\"\n"
+        "            _LOG.info(\"Media UI requested AVR power on through HEOS player\")\n"
+        "            await player.play()\n"
+        "            return\n"
         "        else:\n"
         "            raise RuntimeError(f\"Unexpected AVR power response: {power_state!r}\")\n"
         "        _LOG.info(\"Media UI requested AVR power toggle: %s -> %s\", power_state, command)\n"
@@ -267,7 +265,7 @@ def patch_remote(path: Path) -> None:
         "                    case \"VOLUME_DOWN\":\n"
         "                        await player.volume_down(1 if self._is_avr else 5)\n"
         "                    case \"POWER_TOGGLE\":\n"
-        "                        await self._device.toggle_avr_power()\n"
+        "                        await self._device.toggle_avr_power(player)\n"
         "                    case \"SUBWOOFER_1_LEVEL_UP\":\n"
         "                        await self._device.send_avr_command(\"PSSWL ON\")\n"
         "                        await self._device.send_avr_command(\"PSSWL UP\")\n"
@@ -309,10 +307,7 @@ def patch_media_player(path: Path) -> None:
         "        try:\n",
         "        params = params or {}\n"
         "        player = self._device.get_player(self._player_id)\n"
-        "        avr_power_command = self._is_avr and cmd_id in (\n"
-        "            Commands.ON, Commands.OFF, Commands.TOGGLE\n"
-        "        )\n"
-        "        if not player and not avr_power_command:\n"
+        "        if not player:\n"
         "            return StatusCodes.SERVICE_UNAVAILABLE\n\n"
         "        try:\n",
     )
@@ -350,7 +345,7 @@ def patch_media_player(path: Path) -> None:
         "                case Commands.PLAY_PAUSE:\n",
         "                case Commands.ON:\n"
         "                    if self._is_avr:\n"
-        "                        await self._device.wake_avr()\n"
+        "                        await self._device.wake_avr(player)\n"
         "                    else:\n"
         "                        await player.play()\n\n"
         "                case Commands.OFF:\n"
@@ -358,13 +353,13 @@ def patch_media_player(path: Path) -> None:
         "                        # Remote 3's physical power key dispatches OFF in\n"
         "                        # Media UI even while the AVR is already in standby.\n"
         "                        # Query the AVR so repeated presses genuinely toggle.\n"
-        "                        await self._device.toggle_avr_power()\n"
+        "                        await self._device.toggle_avr_power(player)\n"
         "                    else:\n"
         "                        await player.stop()\n\n"
         "                case Commands.TOGGLE:\n"
         "                    if not self._is_avr:\n"
         "                        return StatusCodes.NOT_IMPLEMENTED\n"
-        "                    await self._device.toggle_avr_power()\n\n"
+        "                    await self._device.toggle_avr_power(player)\n\n"
         "                case Commands.PLAY_PAUSE:\n",
     )
     replace_once(
@@ -435,3 +430,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
