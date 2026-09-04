@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 CUSTOM_REPOSITORY = "https://github.com/celle150190-prog/uc-intg-heos-custom"
-CUSTOM_PACKAGE_REVISION = "21"
+CUSTOM_PACKAGE_REVISION = "22"
 CUSTOM_DRIVER_ID_PREFIX = "heos_c"
 
 
@@ -67,6 +67,32 @@ def patch_device(path: Path) -> None:
         "                    await writer.wait_closed()\n"
         "                except (ConnectionError, OSError):\n"
         "                    pass\n\n"
+        "    async def log_avr_zone_states(self, checkpoint: str) -> None:\n"
+        "        \"\"\"Log passive Main/Zone 2/Zone 3 status for startup diagnosis.\"\"\"\n"
+        "        writer: asyncio.StreamWriter | None = None\n"
+        "        try:\n"
+        "            reader, writer = await asyncio.wait_for(\n"
+        "                asyncio.open_connection(self.address, AVR_CONTROL_PORT),\n"
+        "                timeout=AVR_CONTROL_TIMEOUT,\n"
+        "            )\n"
+        "            # These status queries cannot turn on or off an AVR zone.\n"
+        "            writer.write(b\"PW?\\rZ2?\\rZ3?\\r\")\n"
+        "            await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)\n"
+        "            await asyncio.sleep(0.2)\n"
+        "            response = await asyncio.wait_for(\n"
+        "                reader.read(512), timeout=AVR_CONTROL_TIMEOUT\n"
+        "            )\n"
+        "            state = response.decode(\"ascii\", errors=\"replace\").replace(\"\\r\", \" | \")\n"
+        "            _LOG.info(\"AVR passive state [%s]: %s\", checkpoint, state)\n"
+        "        except (asyncio.TimeoutError, ConnectionError, OSError) as err:\n"
+        "            _LOG.debug(\"AVR passive state query failed at %s: %s\", checkpoint, err)\n"
+        "        finally:\n"
+        "            if writer is not None:\n"
+        "                writer.close()\n"
+        "                try:\n"
+        "                    await writer.wait_closed()\n"
+        "                except (ConnectionError, OSError):\n"
+        "                    pass\n\n"
         "    async def get_avr_power_state(self) -> str:\n"
         "        \"\"\"Read the AVR Main Zone power state without changing it.\"\"\"\n"
         "        writer: asyncio.StreamWriter | None = None\n"
@@ -103,36 +129,57 @@ def patch_device(path: Path) -> None:
         "        _LOG.info(\"Media UI requested AVR power on from %s\", power_state)\n"
         "        await self.send_avr_command(\"PWON\")\n\n"
         "    async def toggle_avr_power(self) -> None:\n"
-        "        \"\"\"Toggle the AVR between on and standby using its actual power state.\"\"\"\n"
-        "        writer: asyncio.StreamWriter | None = None\n"
-        "        try:\n"
-        "            reader, writer = await asyncio.wait_for(\n"
-        "                asyncio.open_connection(self.address, AVR_CONTROL_PORT),\n"
-        "                timeout=AVR_CONTROL_TIMEOUT,\n"
-        "            )\n"
-        "            writer.write(b\"PW?\\r\")\n"
-        "            await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)\n"
-        "            # Some Denon models answer PW? without a trailing CR.  A normal\n"
-        "            # stream read mirrors the proven direct PowerShell test.\n"
-        "            response = await asyncio.wait_for(\n"
-        "                reader.read(64), timeout=AVR_CONTROL_TIMEOUT\n"
-        "            )\n"
-        "            power_state = response.decode(\"ascii\", errors=\"replace\").strip().upper()\n"
-        "            if power_state == \"PWON\":\n"
-        "                command = \"PWSTANDBY\"\n"
-        "            elif power_state in {\"PWSTANDBY\", \"PWOFF\"}:\n"
-        "                command = \"PWON\"\n"
-        "            else:\n"
-        "                raise RuntimeError(f\"Unexpected AVR power response: {power_state!r}\")\n"
-        "            writer.write(f\"{command}\\r\".encode(\"ascii\"))\n"
-        "            await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)\n"
-        "        finally:\n"
-        "            if writer is not None:\n"
-        "                writer.close()\n"
-        "                try:\n"
-        "                    await writer.wait_closed()\n"
-        "                except (ConnectionError, OSError):\n"
-        "                    pass\n",
+        "        \"\"\"Toggle Main Zone without assuming a one-line Telnet response.\"\"\"\n"
+        "        # The AVR may include unsolicited status lines in the reply to PW?.\n"
+        "        # Reuse the parser above, which searches the complete response for\n"
+        "        # the actual Main Zone state instead of requiring an exact match.\n"
+        "        power_state = await self.get_avr_power_state()\n"
+        "        if power_state == \"PWON\":\n"
+        "            command = \"PWSTANDBY\"\n"
+        "        elif power_state in {\"PWSTANDBY\", \"PWOFF\"}:\n"
+        "            command = \"PWON\"\n"
+        "        else:\n"
+        "            raise RuntimeError(f\"Unexpected AVR power response: {power_state!r}\")\n"
+        "        _LOG.info(\"Media UI requested AVR power toggle: %s -> %s\", power_state, command)\n"
+        "        await self.send_avr_command(command)\n",
+    )
+    replace_once(
+        path,
+        "    async def establish_connection(self) -> Heos:\n"
+        "        await self._teardown_client()\n"
+        "        options = HeosOptions(\n",
+        "    async def establish_connection(self) -> Heos:\n"
+        "        await self._teardown_client()\n"
+        "        await self.log_avr_zone_states(\"before HEOS connection\")\n"
+        "        options = HeosOptions(\n",
+    )
+    replace_once(
+        path,
+        "        self._heos = Heos(options)\n"
+        "        await self._heos.connect()\n\n"
+        "        if self._device_config.username and self._device_config.password:\n",
+        "        self._heos = Heos(options)\n"
+        "        await self._heos.connect()\n"
+        "        await self.log_avr_zone_states(\"after HEOS connection\")\n\n"
+        "        if self._device_config.username and self._device_config.password:\n",
+    )
+    replace_once(
+        path,
+        "        self._players = await self._heos.get_players()\n"
+        "        _LOG.info(\n",
+        "        self._players = await self._heos.get_players()\n"
+        "        await self.log_avr_zone_states(\"after HEOS player discovery\")\n"
+        "        _LOG.info(\n",
+    )
+    replace_once(
+        path,
+        "        except Exception as err:\n"
+        "            _LOG.warning(\"[%s] Initial account data load failed: %s\", self.log_id, err)\n\n"
+        "        self._state = \"ON\"\n",
+        "        except Exception as err:\n"
+        "            _LOG.warning(\"[%s] Initial account data load failed: %s\", self.log_id, err)\n\n"
+        "        await self.log_avr_zone_states(\"after HEOS startup\")\n"
+        "        self._state = \"ON\"\n",
     )
 
 
@@ -388,4 +435,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
