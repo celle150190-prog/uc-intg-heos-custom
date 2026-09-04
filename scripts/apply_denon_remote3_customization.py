@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 CUSTOM_REPOSITORY = "https://github.com/celle150190-prog/uc-intg-heos-custom"
-CUSTOM_PACKAGE_REVISION = "23"
+CUSTOM_PACKAGE_REVISION = "24"
 CUSTOM_DRIVER_ID_PREFIX = "heos_c"
 
 
@@ -32,7 +32,7 @@ def patch_device(path: Path) -> None:
     replace_once(
         path,
         "import logging\n",
-        "import asyncio\nimport logging\n",
+        "import asyncio\nimport logging\n\nimport denonavr\n",
     )
     replace_once(
         path,
@@ -67,119 +67,47 @@ def patch_device(path: Path) -> None:
         "                    await writer.wait_closed()\n"
         "                except (ConnectionError, OSError):\n"
         "                    pass\n\n"
-        "    async def log_avr_zone_states(self, checkpoint: str) -> None:\n"
-        "        \"\"\"Log passive Main/Zone 2/Zone 3 status for startup diagnosis.\"\"\"\n"
-        "        writer: asyncio.StreamWriter | None = None\n"
-        "        try:\n"
-        "            reader, writer = await asyncio.wait_for(\n"
-        "                asyncio.open_connection(self.address, AVR_CONTROL_PORT),\n"
-        "                timeout=AVR_CONTROL_TIMEOUT,\n"
-        "            )\n"
-        "            # These status queries cannot turn on or off an AVR zone.\n"
-        "            writer.write(b\"PW?\\rZ2?\\rZ3?\\r\")\n"
-        "            await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)\n"
-        "            await asyncio.sleep(0.2)\n"
-        "            response = await asyncio.wait_for(\n"
-        "                reader.read(512), timeout=AVR_CONTROL_TIMEOUT\n"
-        "            )\n"
-        "            state = response.decode(\"ascii\", errors=\"replace\").replace(\"\\r\", \" | \")\n"
-        "            _LOG.info(\"AVR passive state [%s]: %s\", checkpoint, state)\n"
-        "        except (asyncio.TimeoutError, ConnectionError, OSError) as err:\n"
-        "            _LOG.debug(\"AVR passive state query failed at %s: %s\", checkpoint, err)\n"
-        "        finally:\n"
-        "            if writer is not None:\n"
-        "                writer.close()\n"
-        "                try:\n"
-        "                    await writer.wait_closed()\n"
-        "                except (ConnectionError, OSError):\n"
-        "                    pass\n\n"
-        "    async def get_avr_power_state(self) -> str:\n"
-        "        \"\"\"Read the AVR Main Zone power state without changing it.\"\"\"\n"
-        "        writer: asyncio.StreamWriter | None = None\n"
-        "        try:\n"
-        "            reader, writer = await asyncio.wait_for(\n"
-        "                asyncio.open_connection(self.address, AVR_CONTROL_PORT),\n"
-        "                timeout=AVR_CONTROL_TIMEOUT,\n"
-        "            )\n"
-        "            writer.write(b\"PW?\\r\")\n"
-        "            await asyncio.wait_for(writer.drain(), timeout=AVR_CONTROL_TIMEOUT)\n"
-        "            response = await asyncio.wait_for(\n"
-        "                reader.read(128), timeout=AVR_CONTROL_TIMEOUT\n"
-        "            ).decode(\"ascii\", errors=\"replace\").upper()\n"
-        "            if \"PWSTANDBY\" in response:\n"
-        "                return \"PWSTANDBY\"\n"
-        "            if \"PWOFF\" in response:\n"
-        "                return \"PWOFF\"\n"
-        "            if \"PWON\" in response:\n"
-        "                return \"PWON\"\n"
-        "            raise RuntimeError(f\"Unexpected AVR power response: {response!r}\")\n"
-        "        finally:\n"
-        "            if writer is not None:\n"
-        "                writer.close()\n"
-        "                try:\n"
-        "                    await writer.wait_closed()\n"
-        "                except (ConnectionError, OSError):\n"
-        "                    pass\n\n"
-        "    async def wake_avr(self, player: HeosPlayer) -> None:\n"
-        "        \"\"\"Start the AVR exclusively through the normal HEOS player path.\"\"\"\n"
-        "        _LOG.info(\"Media UI requested AVR power on through HEOS player\")\n"
-        "        await player.play()\n\n"
-        "    async def toggle_avr_power(self, player: HeosPlayer) -> None:\n"
-        "        \"\"\"Toggle Main Zone without assuming a one-line Telnet response.\"\"\"\n"
-        "        # The AVR may include unsolicited status lines in the reply to PW?.\n"
-        "        # Reuse the parser above, which searches the complete response for\n"
-        "        # the actual Main Zone state instead of requiring an exact match.\n"
-        "        power_state = await self.get_avr_power_state()\n"
-        "        if power_state == \"PWON\":\n"
-        "            command = \"PWSTANDBY\"\n"
-        "        elif power_state in {\"PWSTANDBY\", \"PWOFF\"}:\n"
-        "            _LOG.info(\"Media UI requested AVR power on through HEOS player\")\n"
-        "            await player.play()\n"
-        "            return\n"
+        "    async def _get_denon_receiver(self) -> denonavr.DenonAVR:\n"
+        "        \"\"\"Create the official Denon controller on first power action.\"\"\"\n"
+        "        async with self._denon_power_lock:\n"
+        "            if self._denon_receiver is None:\n"
+        "                self._denon_receiver = denonavr.DenonAVR(\n"
+        "                    host=self.address, timeout=AVR_CONTROL_TIMEOUT\n"
+        "                )\n"
+        "            return self._denon_receiver\n\n"
+        "    async def power_on_avr(self) -> None:\n"
+        "        \"\"\"Power on through the same Denon library command as the Denon integration.\"\"\"\n"
+        "        receiver = await self._get_denon_receiver()\n"
+        "        _LOG.info(\"[%s] Media/Remote UI: Denon power on\", self.log_id)\n"
+        "        await receiver.async_power_on()\n\n"
+        "    async def power_off_avr(self) -> None:\n"
+        "        \"\"\"Power off through the same Denon library command as the Denon integration.\"\"\"\n"
+        "        receiver = await self._get_denon_receiver()\n"
+        "        _LOG.info(\"[%s] Media/Remote UI: Denon power off\", self.log_id)\n"
+        "        await receiver.async_power_off()\n\n"
+        "    async def toggle_avr_power(self) -> None:\n"
+        "        \"\"\"Use the official Denon Integration toggle semantics for Main Zone power.\"\"\"\n"
+        "        receiver = await self._get_denon_receiver()\n"
+        "        # Match the Denon integration: its remote UI calls power_off when\n"
+        "        # the controller reports ON, otherwise it calls power_on. Refresh\n"
+        "        # this lightweight controller first because this driver keeps HEOS\n"
+        "        # Media UI as its primary UI and has no Denon polling loop.\n"
+        "        await receiver.async_update()\n"
+        "        if receiver.power == \"ON\":\n"
+        "            await self.power_off_avr()\n"
         "        else:\n"
-        "            raise RuntimeError(f\"Unexpected AVR power response: {power_state!r}\")\n"
-        "        _LOG.info(\"Media UI requested AVR power toggle: %s -> %s\", power_state, command)\n"
-        "        await self.send_avr_command(command)\n",
-    )
-    replace_once(
-        path,
-        "    async def establish_connection(self) -> Heos:\n"
-        "        await self._teardown_client()\n"
-        "        options = HeosOptions(\n",
-        "    async def establish_connection(self) -> Heos:\n"
-        "        await self._teardown_client()\n"
-        "        await self.log_avr_zone_states(\"before HEOS connection\")\n"
-        "        options = HeosOptions(\n",
-    )
-    replace_once(
-        path,
-        "        self._heos = Heos(options)\n"
-        "        await self._heos.connect()\n\n"
-        "        if self._device_config.username and self._device_config.password:\n",
-        "        self._heos = Heos(options)\n"
-        "        await self._heos.connect()\n"
-        "        await self.log_avr_zone_states(\"after HEOS connection\")\n\n"
-        "        if self._device_config.username and self._device_config.password:\n",
-    )
-    replace_once(
-        path,
-        "        self._players = await self._heos.get_players()\n"
-        "        _LOG.info(\n",
-        "        self._players = await self._heos.get_players()\n"
-        "        await self.log_avr_zone_states(\"after HEOS player discovery\")\n"
-        "        _LOG.info(\n",
-    )
-    replace_once(
-        path,
-        "        except Exception as err:\n"
-        "            _LOG.warning(\"[%s] Initial account data load failed: %s\", self.log_id, err)\n\n"
-        "        self._state = \"ON\"\n",
-        "        except Exception as err:\n"
-        "            _LOG.warning(\"[%s] Initial account data load failed: %s\", self.log_id, err)\n\n"
-        "        await self.log_avr_zone_states(\"after HEOS startup\")\n"
-        "        self._state = \"ON\"\n",
+        "            await self.power_on_avr()\n",
     )
 
+    replace_once(
+        path,
+        "        self._last_update_time: float = 0.0\n",
+        "        self._last_update_time: float = 0.0\n"
+        "        # Dedicated controller for Media/Remote UI power only. It is not\n"
+        "        # used for HEOS playback, metadata, volume or subwoofer controls.\n"
+        "        self._denon_receiver: denonavr.DenonAVR | None = None\n"
+        "        self._denon_power_lock = asyncio.Lock()\n",
+    )
 
 def patch_remote(path: Path) -> None:
     replace_once(
@@ -265,7 +193,7 @@ def patch_remote(path: Path) -> None:
         "                    case \"VOLUME_DOWN\":\n"
         "                        await player.volume_down(1 if self._is_avr else 5)\n"
         "                    case \"POWER_TOGGLE\":\n"
-        "                        await self._device.toggle_avr_power(player)\n"
+        "                        await self._device.toggle_avr_power()\n"
         "                    case \"SUBWOOFER_1_LEVEL_UP\":\n"
         "                        await self._device.send_avr_command(\"PSSWL ON\")\n"
         "                        await self._device.send_avr_command(\"PSSWL UP\")\n"
@@ -275,6 +203,19 @@ def patch_remote(path: Path) -> None:
         "                    case \"MUTE_TOGGLE\":\n",
     )
 
+    replace_once(
+        path,
+        "            player = self._device.get_player(self._player_id)\n"
+        "            if not player:\n"
+        "                return StatusCodes.SERVICE_UNAVAILABLE\n\n"
+        "            now = time.monotonic()\n",
+        "            player = self._device.get_player(self._player_id)\n"
+        "            # Power is provided by the dedicated Denon controller and\n"
+        "            # remains usable when HEOS has disconnected in standby.\n"
+        "            if not player and command != \"POWER_TOGGLE\":\n"
+        "                return StatusCodes.SERVICE_UNAVAILABLE\n\n"
+        "            now = time.monotonic()\n",
+    )
 
 def patch_media_player(path: Path) -> None:
     replace_once(
@@ -313,6 +254,22 @@ def patch_media_player(path: Path) -> None:
     )
     replace_once(
         path,
+        "        params = params or {}\n"
+        "        player = self._device.get_player(self._player_id)\n"
+        "        if not player:\n"
+        "            return StatusCodes.SERVICE_UNAVAILABLE\n\n"
+        "        try:\n",
+        "        params = params or {}\n"
+        "        player = self._device.get_player(self._player_id)\n"
+        "        avr_power_command = self._is_avr and cmd_id in (\n"
+        "            Commands.ON, Commands.OFF, Commands.TOGGLE\n"
+        "        )\n"
+        "        if not player and not avr_power_command:\n"
+        "            return StatusCodes.SERVICE_UNAVAILABLE\n\n"
+        "        try:\n",
+    )
+    replace_once(
+        path,
         "        entity_id = f\"media_player.{device_config.identifier}.{player.player_id}\"\n\n"
         "        super().__init__(\n"
         "            entity_id,\n"
@@ -345,21 +302,21 @@ def patch_media_player(path: Path) -> None:
         "                case Commands.PLAY_PAUSE:\n",
         "                case Commands.ON:\n"
         "                    if self._is_avr:\n"
-        "                        await self._device.wake_avr(player)\n"
+        "                        await self._device.power_on_avr()\n"
         "                    else:\n"
         "                        await player.play()\n\n"
         "                case Commands.OFF:\n"
         "                    if self._is_avr:\n"
         "                        # Remote 3's physical power key dispatches OFF in\n"
         "                        # Media UI even while the AVR is already in standby.\n"
-        "                        # Query the AVR so repeated presses genuinely toggle.\n"
-        "                        await self._device.toggle_avr_power(player)\n"
+        "                        # Route it through the Denon Remote-UI toggle path.\n"
+        "                        await self._device.toggle_avr_power()\n"
         "                    else:\n"
         "                        await player.stop()\n\n"
         "                case Commands.TOGGLE:\n"
         "                    if not self._is_avr:\n"
         "                        return StatusCodes.NOT_IMPLEMENTED\n"
-        "                    await self._device.toggle_avr_power(player)\n\n"
+        "                    await self._device.toggle_avr_power()\n\n"
         "                case Commands.PLAY_PAUSE:\n",
     )
     replace_once(
@@ -396,6 +353,16 @@ def patch_media_player(path: Path) -> None:
     )
 
 
+def patch_requirements(path: Path) -> None:
+    """Bundle the same pinned Denon controller used by the Denon integration."""
+    replace_once(
+        path,
+        "pyheos>=1.0.5\n",
+        "pyheos>=1.0.5\n"
+        "denonavr @ git+https://github.com/henrikwidlund/denonavr.git@"
+        "ecf8021049b37ceb9d9c640dea1199d088f27cc7\n",
+    )
+
 def patch_driver(path: Path, upstream_version: str) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
     version = upstream_version.removeprefix("v")
@@ -425,6 +392,7 @@ def main() -> None:
     patch_device(repo / "uc_intg_heos" / "device.py")
     patch_remote(repo / "uc_intg_heos" / "remote.py")
     patch_media_player(repo / "uc_intg_heos" / "media_player.py")
+    patch_requirements(repo / "requirements.txt")
     patch_driver(repo / "driver.json", args.upstream_version)
 
 
