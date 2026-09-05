@@ -171,8 +171,7 @@ def patch_driver(path: Path) -> None:
         "HEOS integration with Custom Denon AVR controls, 1 dB master volume, "
         "Subwoofer 1 controls, and visual favorite-station transport."
     )
-    path.write_text(json.dumps(data, indent=2) + "
-", encoding="utf-8")
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
 def main() -> None:
